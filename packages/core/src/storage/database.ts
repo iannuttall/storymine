@@ -11,8 +11,12 @@ import {
   type SourceRun,
   signalSchema,
   sourceRunSchema,
+  type TranscriptChunk,
   type TranscriptFile,
+  type TranscriptSession,
+  transcriptChunkSchema,
   transcriptFileSchema,
+  transcriptSessionSchema,
 } from '../schemas.js'
 
 const CREATE_SQL = `
@@ -102,6 +106,7 @@ CREATE TABLE IF NOT EXISTS transcript_chunks (
   sequence INTEGER NOT NULL,
   token_estimate INTEGER NOT NULL,
   text_hash TEXT NOT NULL,
+  redacted_text TEXT NOT NULL,
   redaction_count INTEGER NOT NULL DEFAULT 0,
   audit_status TEXT NOT NULL,
   metadata_json TEXT NOT NULL,
@@ -166,6 +171,27 @@ export function initResearchDb(database: Database.Database): void {
   database.pragma('temp_store = MEMORY')
   database.pragma('busy_timeout = 5000')
   database.exec(CREATE_SQL)
+  ensureColumn(
+    database,
+    'transcript_chunks',
+    'redacted_text',
+    "TEXT NOT NULL DEFAULT ''",
+  )
+}
+
+function ensureColumn(
+  database: Database.Database,
+  table: string,
+  column: string,
+  definition: string,
+): void {
+  const columns = database
+    .prepare(`PRAGMA table_info(${table})`)
+    .all() as Array<{
+    name: string
+  }>
+  if (columns.some((item) => item.name === column)) return
+  database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
 }
 
 export function stableId(parts: unknown[]): string {
@@ -404,6 +430,84 @@ export function listTranscriptFiles(
       limit,
     }) as TranscriptFile[]
   return rows.map((row) => transcriptFileSchema.parse(row))
+}
+
+export function upsertTranscriptSession(
+  database: Database.Database,
+  session: TranscriptSession,
+): void {
+  const parsed = transcriptSessionSchema.parse(session)
+  database
+    .prepare(
+      `INSERT INTO transcript_sessions (
+        id, provider, file_id, title, cwd, started_at, updated_at,
+        message_count, metadata_json
+      ) VALUES (
+        @id, @provider, @fileId, @title, @cwd, @startedAt, @updatedAt,
+        @messageCount, @metadataJson
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        title = excluded.title,
+        cwd = excluded.cwd,
+        started_at = excluded.started_at,
+        updated_at = excluded.updated_at,
+        message_count = excluded.message_count,
+        metadata_json = excluded.metadata_json`,
+    )
+    .run({
+      ...parsed,
+      metadataJson: JSON.stringify(parsed.metadata),
+    })
+}
+
+export function upsertTranscriptChunks(
+  database: Database.Database,
+  chunks: TranscriptChunk[],
+): void {
+  const insert = database.prepare(
+    `INSERT INTO transcript_chunks (
+      id, session_id, provider, sequence, token_estimate, text_hash,
+      redacted_text, redaction_count, audit_status, metadata_json
+    ) VALUES (
+      @id, @sessionId, @provider, @sequence, @tokenEstimate, @textHash,
+      @redactedText, @redactionCount, @auditStatus, @metadataJson
+    )
+    ON CONFLICT(session_id, sequence) DO UPDATE SET
+      token_estimate = excluded.token_estimate,
+      text_hash = excluded.text_hash,
+      redacted_text = excluded.redacted_text,
+      redaction_count = excluded.redaction_count,
+      audit_status = CASE
+        WHEN transcript_chunks.text_hash = excluded.text_hash THEN transcript_chunks.audit_status
+        ELSE excluded.audit_status
+      END,
+      metadata_json = excluded.metadata_json`,
+  )
+  const write = database.transaction((items: TranscriptChunk[]) => {
+    for (const item of items) {
+      const chunk = transcriptChunkSchema.parse(item)
+      insert.run({
+        ...chunk,
+        metadataJson: JSON.stringify(chunk.metadata),
+      })
+    }
+  })
+  write(chunks)
+}
+
+export function markTranscriptFileIndexed(
+  database: Database.Database,
+  id: string,
+): void {
+  database
+    .prepare(
+      `UPDATE transcript_files
+       SET indexed_at = @indexedAt,
+           status = 'indexed',
+           error = NULL
+       WHERE id = @id`,
+    )
+    .run({ id, indexedAt: nowIso() })
 }
 
 export function getStorageStats(

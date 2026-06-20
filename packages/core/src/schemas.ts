@@ -100,6 +100,7 @@ export const transcriptChunkSchema = z.object({
   sequence: z.number().int().nonnegative(),
   tokenEstimate: z.number().int().nonnegative(),
   textHash: z.string().min(1),
+  redactedText: z.string().min(1),
   redactionCount: z.number().int().nonnegative().default(0),
   auditStatus: z.enum(['pending', 'audited', 'failed']).default('pending'),
   metadata: jsonRecordSchema.default({}),

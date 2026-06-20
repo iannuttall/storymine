@@ -2,6 +2,7 @@ import {
   collectAndStoreAppUsage,
   collectAndStoreChromeHistory,
   indexTranscriptFiles,
+  processTranscriptFiles,
 } from '@research/core'
 import { defineCommand } from 'citty'
 import { jsonFlag, numberArg, stringArg } from '../args.js'
@@ -177,6 +178,52 @@ export const meCommand = defineCommand({
             printTable(
               ['Provider', 'Files', 'Bytes'],
               transcriptIndexRows(result.files),
+            )
+          },
+        }),
+        parse: defineCommand({
+          meta: {
+            name: 'parse',
+            description: 'Parse indexed transcript files into redacted chunks',
+          },
+          args: {
+            limit: {
+              type: 'string',
+              default: '20',
+              description: 'Maximum pending files to parse',
+            },
+            maxTokens: {
+              type: 'string',
+              default: '3500',
+              description: 'Approximate maximum tokens per chunk',
+            },
+            json: {
+              type: 'boolean',
+              default: false,
+              description: 'Print structured JSON',
+            },
+          },
+          run: ({ args }) => {
+            const result = processTranscriptFiles({
+              limit: numberArg(args.limit, 20, { min: 1, max: 1000 }),
+              maxTokens: numberArg(args.maxTokens, 3500, {
+                min: 200,
+                max: 12_000,
+              }),
+            })
+            if (jsonFlag(args)) {
+              printJson(result)
+              return
+            }
+            printTable(
+              ['Files', 'Sessions', 'Chunks'],
+              [
+                [
+                  String(result.filesProcessed),
+                  String(result.sessions),
+                  String(result.chunks),
+                ],
+              ],
             )
           },
         }),
