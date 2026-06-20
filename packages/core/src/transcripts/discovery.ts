@@ -1,6 +1,13 @@
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readdirSync,
+  readSync,
+  statSync,
+} from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import {
   type TranscriptFile,
   type TranscriptProvider,
@@ -20,6 +27,8 @@ export interface TranscriptDiscoveryOptions {
   providers?: TranscriptProvider[]
   since?: Date
   limit?: number
+  projectIncludes?: string[]
+  includeAuxiliary?: boolean
 }
 
 export interface TranscriptIndexResult {
@@ -48,8 +57,10 @@ export function discoverTranscriptFiles(
         ? join(options.claudeRoot ?? defaultClaudeRoot(), 'projects')
         : join(options.codexRoot ?? defaultCodexRoot(), 'sessions')
     for (const path of walkJsonlFiles(root)) {
+      if (!options.includeAuxiliary && isAuxiliaryTranscript(path)) continue
       const stat = statSync(path)
       if (options.since && stat.mtime < options.since) continue
+      if (!matchesProject(path, options.projectIncludes)) continue
       files.push(
         transcriptFileSchema.parse({
           id: stableId(['transcript-file', provider, path]),
@@ -80,6 +91,8 @@ export function indexTranscriptFiles(
       providers: options.providers ?? ['claude', 'codex'],
       since: options.since?.toISOString() ?? null,
       limit: options.limit ?? 10_000,
+      projectIncludes: options.projectIncludes ?? [],
+      includeAuxiliary: Boolean(options.includeAuxiliary),
     },
   })
 
@@ -126,4 +139,73 @@ function sortByModified(files: TranscriptFile[]): TranscriptFile[] {
 function clampInt(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min
   return Math.max(min, Math.min(Math.trunc(value), max))
+}
+
+function matchesProject(path: string, includes: string[] = []): boolean {
+  const needles = includes.map(normalizeMatchText).filter(Boolean)
+  if (needles.length === 0) return true
+  const pathText = normalizeMatchText(path)
+  if (needles.some((needle) => pathText.includes(needle))) return true
+  const metadata = readTranscriptMetadataPreview(path)
+  return needles.some((needle) => metadata.includes(needle))
+}
+
+function readTranscriptMetadataPreview(path: string): string {
+  const preview = readFileHead(path, 256 * 1024)
+  const values: string[] = []
+  for (const line of preview.split(/\r?\n/).slice(0, 200)) {
+    const record = parseJsonLine(line)
+    if (!record) continue
+    const payload = asRecord(record.payload)
+    pushString(values, record.cwd)
+    pushString(values, payload.cwd)
+    pushString(values, record.title)
+    pushString(values, payload.title)
+    pushString(values, record.thread_name)
+  }
+  return normalizeMatchText(values.join(' '))
+}
+
+function readFileHead(path: string, bytes: number): string {
+  let fd: number | undefined
+  try {
+    fd = openSync(path, 'r')
+    const buffer = Buffer.alloc(bytes)
+    const read = readSync(fd, buffer, 0, bytes, 0)
+    return buffer.subarray(0, read).toString('utf8')
+  } catch {
+    return ''
+  } finally {
+    if (fd !== undefined) closeSync(fd)
+  }
+}
+
+function parseJsonLine(line: string): Record<string, unknown> | null {
+  const trimmed = line.trim()
+  if (!trimmed) return null
+  try {
+    return asRecord(JSON.parse(trimmed) as unknown)
+  } catch {
+    return null
+  }
+}
+
+function pushString(values: string[], value: unknown): void {
+  if (typeof value === 'string' && value.length > 0) values.push(value)
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return value as Record<string, unknown>
+}
+
+function normalizeMatchText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9/._-]+/g, ' ')
+    .trim()
+}
+
+function isAuxiliaryTranscript(path: string): boolean {
+  return basename(path).startsWith('agent-')
 }

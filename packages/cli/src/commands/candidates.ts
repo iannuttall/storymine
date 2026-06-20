@@ -29,6 +29,12 @@ export const candidatesCommand = defineCommand({
           default: '25',
           description: 'Maximum findings to promote',
         },
+        maxPerAlphaType: {
+          type: 'string',
+          default: '4',
+          description:
+            'Maximum promoted candidates per alpha type, 0 disables cap',
+        },
         json: {
           type: 'boolean',
           default: false,
@@ -44,6 +50,10 @@ export const candidatesCommand = defineCommand({
         const result = promoteTranscriptFindings({
           minConfidence: floatArg(args.minConfidence, 0.7, { min: 0, max: 1 }),
           limit: numberArg(args.limit, 25, { min: 1, max: 500 }),
+          maxPerAlphaType: numberArg(args.maxPerAlphaType, 4, {
+            min: 0,
+            max: 100,
+          }),
           force: Boolean(args.force),
         })
         if (jsonFlag(args)) {

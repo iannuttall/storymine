@@ -20,12 +20,23 @@ export interface TranscriptAuditModel {
 export interface AuditTranscriptOptions {
   limit?: number
   model: TranscriptAuditModel
+  onProgress?: (event: TranscriptAuditProgressEvent) => void
 }
 
 export interface AuditTranscriptResult {
   chunksAudited: number
   chunksFailed: number
   findings: number
+}
+
+export interface TranscriptAuditProgressEvent {
+  chunkId: string
+  sessionId: string
+  sequence: number
+  index: number
+  total: number
+  status: 'started' | 'audited' | 'failed'
+  findings?: number
 }
 
 interface ParsedFinding {
@@ -60,7 +71,17 @@ export async function auditPendingTranscriptChunks(
   let findingsCount = 0
   let failedCount = 0
 
-  for (const chunk of chunks) {
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index]
+    if (!chunk) continue
+    const baseProgress = {
+      chunkId: chunk.id,
+      sessionId: chunk.sessionId,
+      sequence: chunk.sequence,
+      index: index + 1,
+      total: chunks.length,
+    }
+    options.onProgress?.({ ...baseProgress, status: 'started' })
     try {
       const output = await options.model.complete(auditPromptForChunk(chunk))
       const parsed = parseAuditResponse(output)
@@ -68,9 +89,15 @@ export async function auditPendingTranscriptChunks(
       insertTranscriptFindings(database, findings)
       markTranscriptChunkAuditStatus(database, chunk.id, 'audited')
       findingsCount += findings.length
+      options.onProgress?.({
+        ...baseProgress,
+        status: 'audited',
+        findings: findings.length,
+      })
     } catch {
       markTranscriptChunkAuditStatus(database, chunk.id, 'failed')
       failedCount += 1
+      options.onProgress?.({ ...baseProgress, status: 'failed' })
     }
   }
 

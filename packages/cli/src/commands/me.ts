@@ -151,6 +151,16 @@ export const meCommand = defineCommand({
               type: 'string',
               description: 'Override Codex config root',
             },
+            project: {
+              type: 'string',
+              description:
+                'Only index transcript files matching project path/cwd/title text, comma-separated',
+            },
+            includeAuxiliary: {
+              type: 'boolean',
+              default: false,
+              description: 'Include auxiliary Claude agent transcript files',
+            },
             json: {
               type: 'boolean',
               default: false,
@@ -167,12 +177,15 @@ export const meCommand = defineCommand({
               : undefined
             const claudeRoot = stringArg(args.claudeRoot)
             const codexRoot = stringArg(args.codexRoot)
+            const projectIncludes = commaListArg(args.project)
             const result = indexTranscriptFiles({
               providers: providersArg(String(args.provider ?? 'all')),
               limit: numberArg(args.limit, 10_000, { min: 1, max: 100_000 }),
               ...(since ? { since } : {}),
               ...(claudeRoot ? { claudeRoot } : {}),
               ...(codexRoot ? { codexRoot } : {}),
+              ...(projectIncludes.length > 0 ? { projectIncludes } : {}),
+              includeAuxiliary: Boolean(args.includeAuxiliary),
             })
             if (jsonFlag(args)) {
               printJson(result)
@@ -268,6 +281,11 @@ export const meCommand = defineCommand({
               default: false,
               description: 'Print structured JSON',
             },
+            progress: {
+              type: 'boolean',
+              default: false,
+              description: 'Print per-chunk audit progress to stderr',
+            },
           },
           run: async ({ args }) => {
             const command = stringArg(args.command)
@@ -276,6 +294,7 @@ export const meCommand = defineCommand({
                 'Pass --command, for example: --command "claude -p"',
               )
             }
+            const shouldProgress = Boolean(args.progress) || !jsonFlag(args)
             const result = await auditPendingTranscriptChunks({
               limit: numberArg(args.limit, 10, { min: 1, max: 100 }),
               model: createCommandAuditModel(command, {
@@ -285,6 +304,27 @@ export const meCommand = defineCommand({
                     max: 1800,
                   }) * 1000,
               }),
+              ...(shouldProgress
+                ? {
+                    onProgress: (event) => {
+                      if (event.status === 'started') {
+                        process.stderr.write(
+                          `Auditing chunk ${event.index}/${event.total} (${event.sessionId} #${event.sequence})\n`,
+                        )
+                        return
+                      }
+                      if (event.status === 'audited') {
+                        process.stderr.write(
+                          `Audited chunk ${event.index}/${event.total}: ${event.findings ?? 0} findings\n`,
+                        )
+                        return
+                      }
+                      process.stderr.write(
+                        `Failed chunk ${event.index}/${event.total} (${event.sessionId} #${event.sequence})\n`,
+                      )
+                    },
+                  }
+                : {}),
             })
             if (jsonFlag(args)) {
               printJson(result)
@@ -352,6 +392,15 @@ function providersArg(value: string): Array<'claude' | 'codex'> {
   if (value === 'claude') return ['claude']
   if (value === 'codex') return ['codex']
   return ['claude', 'codex']
+}
+
+function commaListArg(value: unknown): string[] {
+  const raw = stringArg(value)
+  if (!raw) return []
+  return raw
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 function transcriptIndexRows(

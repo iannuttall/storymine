@@ -40,3 +40,62 @@ test('discoverTranscriptFiles finds claude and codex jsonl files', () => {
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('discoverTranscriptFiles filters by project path and cwd metadata', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'research-transcripts-'))
+  try {
+    const claudeRoot = join(dir, '.claude')
+    const codexRoot = join(dir, '.codex')
+    mkdirSync(join(claudeRoot, 'projects', '-Users-me-sites-binday'), {
+      recursive: true,
+    })
+    mkdirSync(join(claudeRoot, 'projects', '-Users-me-sites-other'), {
+      recursive: true,
+    })
+    mkdirSync(join(codexRoot, 'sessions', '2026', '06', '20'), {
+      recursive: true,
+    })
+    writeFileSync(
+      join(claudeRoot, 'projects', '-Users-me-sites-binday', 'session.jsonl'),
+      '{"type":"user"}\n',
+    )
+    writeFileSync(
+      join(claudeRoot, 'projects', '-Users-me-sites-binday', 'agent-123.jsonl'),
+      '{"type":"user"}\n',
+    )
+    writeFileSync(
+      join(claudeRoot, 'projects', '-Users-me-sites-other', 'session.jsonl'),
+      '{"type":"user"}\n',
+    )
+    writeFileSync(
+      join(codexRoot, 'sessions', '2026', '06', '20', 'binday.jsonl'),
+      '{"type":"session_meta","payload":{"cwd":"/Users/me/apps/mobile/binday"}}\n',
+    )
+    writeFileSync(
+      join(codexRoot, 'sessions', '2026', '06', '20', 'other.jsonl'),
+      '{"type":"session_meta","payload":{"cwd":"/Users/me/apps/other"}}\n',
+    )
+
+    const files = discoverTranscriptFiles({
+      claudeRoot,
+      codexRoot,
+      providers: ['claude', 'codex'],
+      projectIncludes: ['binday'],
+    })
+
+    assert.equal(files.length, 2)
+    assert.ok(files.every((file) => file.path.includes('binday')))
+    assert.ok(files.every((file) => !file.path.includes('agent-')))
+
+    const withAuxiliary = discoverTranscriptFiles({
+      claudeRoot,
+      codexRoot,
+      providers: ['claude'],
+      projectIncludes: ['binday'],
+      includeAuxiliary: true,
+    })
+    assert.equal(withAuxiliary.length, 2)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
