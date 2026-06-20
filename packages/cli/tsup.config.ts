@@ -1,9 +1,10 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: ['src/index.ts', 'src/help.test.ts'],
   format: ['esm'],
   target: 'node20',
+  platform: 'node',
   clean: true,
   dts: true,
   sourcemap: true,
@@ -11,4 +12,3 @@ export default defineConfig({
     js: '#!/usr/bin/env node',
   },
 })
-
