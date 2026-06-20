@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { researchCoreVersion } from '@research/core'
 import { defineCommand, runMain } from 'citty'
+import { candidatesCommand } from './commands/candidates.js'
 import { meCommand } from './commands/me.js'
 
 const main = defineCommand({
@@ -10,6 +11,7 @@ const main = defineCommand({
     description: 'Local-first research collection CLI',
   },
   subCommands: {
+    candidates: candidatesCommand,
     me: meCommand,
   },
   run: () => {

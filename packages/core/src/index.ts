@@ -1,5 +1,6 @@
 export const researchCoreVersion = '0.1.0'
 
+export * from './candidates.js'
 export * from './collectors/app-usage.js'
 export * from './collectors/chrome-history.js'
 export * from './paths.js'

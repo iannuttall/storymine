@@ -368,6 +368,47 @@ export function insertCandidates(
   write(candidates)
 }
 
+export function listCandidates(
+  database: Database.Database,
+  options: { status?: string; limit?: number } = {},
+): Candidate[] {
+  const limit = Math.max(1, Math.min(options.limit ?? 100, 1000))
+  const rows = database
+    .prepare(
+      `SELECT
+        id,
+        source,
+        signal_id AS signalId,
+        name,
+        url,
+        one_liner AS oneLiner,
+        why_interesting AS whyInteresting,
+        tier,
+        metrics_json AS metricsJson,
+        provenance_json AS provenanceJson,
+        captured_at AS capturedAt,
+        score,
+        status
+      FROM candidates
+      WHERE (@status IS NULL OR status = @status)
+      ORDER BY captured_at DESC
+      LIMIT @limit`,
+    )
+    .all({ status: options.status ?? null, limit }) as Array<
+    Omit<Candidate, 'metrics' | 'provenance'> & {
+      metricsJson: string
+      provenanceJson: string
+    }
+  >
+  return rows.map((row) =>
+    candidateSchema.parse({
+      ...row,
+      metrics: parseJsonRecord(row.metricsJson),
+      provenance: parseJsonRecord(row.provenanceJson),
+    }),
+  )
+}
+
 export function upsertTranscriptFiles(
   database: Database.Database,
   files: TranscriptFile[],
@@ -590,6 +631,68 @@ export function insertTranscriptFindings(
     }
   })
   write(findings)
+}
+
+export function listTranscriptFindings(
+  database: Database.Database,
+  options: {
+    minConfidence?: number
+    withoutCandidate?: boolean
+    limit?: number
+  } = {},
+): TranscriptFinding[] {
+  const limit = Math.max(1, Math.min(options.limit ?? 100, 1000))
+  const rows = database
+    .prepare(
+      `SELECT
+        id,
+        session_id AS sessionId,
+        chunk_id AS chunkId,
+        lesson,
+        why_non_obvious AS whyNonObvious,
+        category,
+        confidence,
+        evidence_json AS evidenceJson,
+        candidate_id AS candidateId,
+        captured_at AS capturedAt,
+        metadata_json AS metadataJson
+      FROM transcript_findings
+      WHERE confidence >= @minConfidence
+        AND (@withoutCandidate = 0 OR candidate_id IS NULL)
+      ORDER BY confidence DESC, captured_at DESC
+      LIMIT @limit`,
+    )
+    .all({
+      minConfidence: options.minConfidence ?? 0,
+      withoutCandidate: options.withoutCandidate ? 1 : 0,
+      limit,
+    }) as Array<
+    Omit<TranscriptFinding, 'evidence' | 'metadata'> & {
+      evidenceJson: string
+      metadataJson: string
+    }
+  >
+  return rows.map((row) =>
+    transcriptFindingSchema.parse({
+      ...row,
+      evidence: JSON.parse(row.evidenceJson) as unknown,
+      metadata: parseJsonRecord(row.metadataJson),
+    }),
+  )
+}
+
+export function attachCandidateToFinding(
+  database: Database.Database,
+  findingId: string,
+  candidateId: string,
+): void {
+  database
+    .prepare(
+      `UPDATE transcript_findings
+       SET candidate_id = @candidateId
+       WHERE id = @findingId`,
+    )
+    .run({ findingId, candidateId })
 }
 
 export function getStorageStats(
