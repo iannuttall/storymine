@@ -1,7 +1,7 @@
-#!/usr/bin/env node
 import { researchCoreVersion } from '@research/core'
 import { defineCommand, runMain } from 'citty'
 import { candidatesCommand } from './commands/candidates.js'
+import { mcpCommand } from './commands/mcp.js'
 import { meCommand } from './commands/me.js'
 
 const main = defineCommand({
@@ -12,12 +12,8 @@ const main = defineCommand({
   },
   subCommands: {
     candidates: candidatesCommand,
+    mcp: mcpCommand,
     me: meCommand,
-  },
-  run: () => {
-    process.stdout.write(
-      'Use `research --help` for commands. Collectors are still being implemented.\n',
-    )
   },
 })
 
