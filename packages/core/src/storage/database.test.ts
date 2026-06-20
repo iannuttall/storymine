@@ -9,7 +9,9 @@ import {
   getStorageStats,
   insertSignals,
   listSignals,
+  listTranscriptFiles,
   openResearchDb,
+  upsertTranscriptFiles,
 } from './database.js'
 
 test('database stores source runs and signals', () => {
@@ -46,6 +48,33 @@ test('database stores source runs and signals', () => {
     const stats = getStorageStats(db, join(dir, 'test.db'))
     assert.equal(stats.counts.sourceRuns, 1)
     assert.equal(stats.counts.signals, 1)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('database upserts transcript file checkpoints', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'research-db-'))
+  try {
+    const dbPath = join(dir, 'test.db')
+    const db = openResearchDb(dbPath)
+    upsertTranscriptFiles(db, [
+      {
+        id: 'file_1',
+        provider: 'codex',
+        path: join(dir, 'session.jsonl'),
+        sizeBytes: 12,
+        modifiedAtMs: 1234,
+        hash: 'hash_1',
+        indexedAt: null,
+        status: 'pending',
+        error: null,
+      },
+    ])
+
+    const files = listTranscriptFiles(db, { provider: 'codex' })
+    assert.equal(files.length, 1)
+    assert.equal(files[0]?.status, 'pending')
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

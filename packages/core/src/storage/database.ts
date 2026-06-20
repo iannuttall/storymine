@@ -11,6 +11,8 @@ import {
   type SourceRun,
   signalSchema,
   sourceRunSchema,
+  type TranscriptFile,
+  transcriptFileSchema,
 } from '../schemas.js'
 
 const CREATE_SQL = `
@@ -336,6 +338,72 @@ export function insertCandidates(
     }
   })
   write(candidates)
+}
+
+export function upsertTranscriptFiles(
+  database: Database.Database,
+  files: TranscriptFile[],
+): void {
+  const insert = database.prepare(
+    `INSERT INTO transcript_files (
+      id, provider, path, size_bytes, modified_at_ms, hash, indexed_at,
+      status, error
+    ) VALUES (
+      @id, @provider, @path, @sizeBytes, @modifiedAtMs, @hash, @indexedAt,
+      @status, @error
+    )
+    ON CONFLICT(path) DO UPDATE SET
+      provider = excluded.provider,
+      size_bytes = excluded.size_bytes,
+      modified_at_ms = excluded.modified_at_ms,
+      hash = excluded.hash,
+      indexed_at = CASE
+        WHEN transcript_files.hash = excluded.hash THEN transcript_files.indexed_at
+        ELSE NULL
+      END,
+      status = CASE
+        WHEN transcript_files.hash = excluded.hash THEN transcript_files.status
+        ELSE excluded.status
+      END,
+      error = excluded.error`,
+  )
+  const write = database.transaction((items: TranscriptFile[]) => {
+    for (const item of items) {
+      insert.run(transcriptFileSchema.parse(item))
+    }
+  })
+  write(files)
+}
+
+export function listTranscriptFiles(
+  database: Database.Database,
+  options: { provider?: string; status?: string; limit?: number } = {},
+): TranscriptFile[] {
+  const limit = Math.max(1, Math.min(options.limit ?? 100, 10_000))
+  const rows = database
+    .prepare(
+      `SELECT
+        id,
+        provider,
+        path,
+        size_bytes AS sizeBytes,
+        modified_at_ms AS modifiedAtMs,
+        hash,
+        indexed_at AS indexedAt,
+        status,
+        error
+      FROM transcript_files
+      WHERE (@provider IS NULL OR provider = @provider)
+        AND (@status IS NULL OR status = @status)
+      ORDER BY modified_at_ms DESC
+      LIMIT @limit`,
+    )
+    .all({
+      provider: options.provider ?? null,
+      status: options.status ?? null,
+      limit,
+    }) as TranscriptFile[]
+  return rows.map((row) => transcriptFileSchema.parse(row))
 }
 
 export function getStorageStats(

@@ -1,6 +1,7 @@
 import {
   collectAndStoreAppUsage,
   collectAndStoreChromeHistory,
+  indexTranscriptFiles,
 } from '@research/core'
 import { defineCommand } from 'citty'
 import { jsonFlag, numberArg, stringArg } from '../args.js'
@@ -112,5 +113,97 @@ export const meCommand = defineCommand({
         )
       },
     }),
+    transcripts: defineCommand({
+      meta: {
+        name: 'transcripts',
+        description: 'Index and audit local AI transcript files',
+      },
+      subCommands: {
+        index: defineCommand({
+          meta: {
+            name: 'index',
+            description: 'Discover Claude and Codex transcript files',
+          },
+          args: {
+            provider: {
+              type: 'string',
+              default: 'all',
+              description: 'Provider to index: all, claude, or codex',
+            },
+            sinceDays: {
+              type: 'string',
+              description: 'Only include files modified in the last N days',
+            },
+            limit: {
+              type: 'string',
+              default: '10000',
+              description: 'Maximum files to index',
+            },
+            claudeRoot: {
+              type: 'string',
+              description: 'Override Claude config root',
+            },
+            codexRoot: {
+              type: 'string',
+              description: 'Override Codex config root',
+            },
+            json: {
+              type: 'boolean',
+              default: false,
+              description: 'Print structured JSON',
+            },
+          },
+          run: ({ args }) => {
+            const sinceDays =
+              args.sinceDays === undefined
+                ? undefined
+                : numberArg(args.sinceDays, 0, { min: 1, max: 3650 })
+            const since = sinceDays
+              ? new Date(Date.now() - sinceDays * 86400 * 1000)
+              : undefined
+            const claudeRoot = stringArg(args.claudeRoot)
+            const codexRoot = stringArg(args.codexRoot)
+            const result = indexTranscriptFiles({
+              providers: providersArg(String(args.provider ?? 'all')),
+              limit: numberArg(args.limit, 10_000, { min: 1, max: 100_000 }),
+              ...(since ? { since } : {}),
+              ...(claudeRoot ? { claudeRoot } : {}),
+              ...(codexRoot ? { codexRoot } : {}),
+            })
+            if (jsonFlag(args)) {
+              printJson(result)
+              return
+            }
+            printTable(
+              ['Provider', 'Files', 'Bytes'],
+              transcriptIndexRows(result.files),
+            )
+          },
+        }),
+      },
+    }),
   },
 })
+
+function providersArg(value: string): Array<'claude' | 'codex'> {
+  if (value === 'claude') return ['claude']
+  if (value === 'codex') return ['codex']
+  return ['claude', 'codex']
+}
+
+function transcriptIndexRows(
+  files: Array<{ provider: string; sizeBytes: number }>,
+): string[][] {
+  const rows = new Map<string, { count: number; bytes: number }>()
+  for (const file of files) {
+    const current = rows.get(file.provider) ?? { count: 0, bytes: 0 }
+    current.count += 1
+    current.bytes += file.sizeBytes
+    rows.set(file.provider, current)
+  }
+  return [...rows.entries()].map(([provider, row]) => [
+    provider,
+    String(row.count),
+    String(row.bytes),
+  ])
+}
