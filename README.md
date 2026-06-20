@@ -26,6 +26,7 @@ research candidates export --format markdown
 research mcp serve
 research privacy
 research doctor
+research reset --yes
 ```
 
 ## Install
@@ -39,3 +40,16 @@ pnpm build
 
 The CLI stores local config, cache, and audit state using OS-specific app paths. It should never write raw transcript or browser-history exports into this repo.
 
+Use `research privacy` to inspect local storage paths. Use `research reset --yes` to remove the CLI's local config, cache, logs, and SQLite database.
+
+## Transcript Flow
+
+```bash
+research me transcripts index --sinceDays 14
+research me transcripts parse --limit 20
+research me transcripts audit --command "claude -p" --limit 5
+research candidates promote
+research candidates export --format markdown
+```
+
+The audit step passes redacted chunks to the configured model command over stdin and expects JSON findings back.

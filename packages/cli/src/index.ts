@@ -3,6 +3,11 @@ import { defineCommand, runMain } from 'citty'
 import { candidatesCommand } from './commands/candidates.js'
 import { mcpCommand } from './commands/mcp.js'
 import { meCommand } from './commands/me.js'
+import {
+  doctorCommand,
+  privacyCommand,
+  resetCommand,
+} from './commands/system.js'
 
 const main = defineCommand({
   meta: {
@@ -12,8 +17,11 @@ const main = defineCommand({
   },
   subCommands: {
     candidates: candidatesCommand,
+    doctor: doctorCommand,
     mcp: mcpCommand,
     me: meCommand,
+    privacy: privacyCommand,
+    reset: resetCommand,
   },
 })
 

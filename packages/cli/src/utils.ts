@@ -9,3 +9,19 @@ export function printTable(headers: string[], rows: string[][]): void {
   for (const row of rows) table.push(row)
   process.stdout.write(`${table.toString()}\n`)
 }
+
+export function printKeyValue(rows: Array<[string, string]>): void {
+  const width = Math.max(...rows.map(([key]) => key.length), 1)
+  for (const [key, value] of rows) {
+    process.stdout.write(`${key.padEnd(width)}  ${value}\n`)
+  }
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  }
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`
+}
