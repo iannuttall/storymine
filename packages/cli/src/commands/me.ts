@@ -1,6 +1,8 @@
 import {
+  auditPendingTranscriptChunks,
   collectAndStoreAppUsage,
   collectAndStoreChromeHistory,
+  createCommandAuditModel,
   indexTranscriptFiles,
   processTranscriptFiles,
 } from '@research/core'
@@ -224,6 +226,48 @@ export const meCommand = defineCommand({
                   String(result.chunks),
                 ],
               ],
+            )
+          },
+        }),
+        audit: defineCommand({
+          meta: {
+            name: 'audit',
+            description: 'Audit pending redacted transcript chunks',
+          },
+          args: {
+            command: {
+              type: 'string',
+              description: 'Model command that reads prompt from stdin',
+            },
+            limit: {
+              type: 'string',
+              default: '10',
+              description: 'Maximum pending chunks to audit',
+            },
+            json: {
+              type: 'boolean',
+              default: false,
+              description: 'Print structured JSON',
+            },
+          },
+          run: async ({ args }) => {
+            const command = stringArg(args.command)
+            if (!command) {
+              throw new Error(
+                'Pass --command, for example: --command "claude -p"',
+              )
+            }
+            const result = await auditPendingTranscriptChunks({
+              limit: numberArg(args.limit, 10, { min: 1, max: 100 }),
+              model: createCommandAuditModel(command),
+            })
+            if (jsonFlag(args)) {
+              printJson(result)
+              return
+            }
+            printTable(
+              ['Chunks', 'Findings'],
+              [[String(result.chunksAudited), String(result.findings)]],
             )
           },
         }),

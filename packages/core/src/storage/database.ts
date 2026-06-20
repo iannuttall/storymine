@@ -13,9 +13,11 @@ import {
   sourceRunSchema,
   type TranscriptChunk,
   type TranscriptFile,
+  type TranscriptFinding,
   type TranscriptSession,
   transcriptChunkSchema,
   transcriptFileSchema,
+  transcriptFindingSchema,
   transcriptSessionSchema,
 } from '../schemas.js'
 
@@ -508,6 +510,86 @@ export function markTranscriptFileIndexed(
        WHERE id = @id`,
     )
     .run({ id, indexedAt: nowIso() })
+}
+
+export function listTranscriptChunks(
+  database: Database.Database,
+  options: { status?: string; limit?: number } = {},
+): TranscriptChunk[] {
+  const limit = Math.max(1, Math.min(options.limit ?? 20, 1000))
+  const rows = database
+    .prepare(
+      `SELECT
+        id,
+        session_id AS sessionId,
+        provider,
+        sequence,
+        token_estimate AS tokenEstimate,
+        text_hash AS textHash,
+        redacted_text AS redactedText,
+        redaction_count AS redactionCount,
+        audit_status AS auditStatus,
+        metadata_json AS metadataJson
+      FROM transcript_chunks
+      WHERE (@status IS NULL OR audit_status = @status)
+      ORDER BY rowid ASC
+      LIMIT @limit`,
+    )
+    .all({ status: options.status ?? null, limit }) as Array<
+    Omit<TranscriptChunk, 'metadata'> & { metadataJson: string }
+  >
+  return rows.map((row) =>
+    transcriptChunkSchema.parse({
+      ...row,
+      metadata: parseJsonRecord(row.metadataJson),
+    }),
+  )
+}
+
+export function markTranscriptChunkAuditStatus(
+  database: Database.Database,
+  id: string,
+  status: 'pending' | 'audited' | 'failed',
+): void {
+  database
+    .prepare(
+      `UPDATE transcript_chunks SET audit_status = @status WHERE id = @id`,
+    )
+    .run({ id, status })
+}
+
+export function insertTranscriptFindings(
+  database: Database.Database,
+  findings: TranscriptFinding[],
+): void {
+  const insert = database.prepare(
+    `INSERT INTO transcript_findings (
+      id, session_id, chunk_id, lesson, why_non_obvious, category, confidence,
+      evidence_json, candidate_id, captured_at, metadata_json
+    ) VALUES (
+      @id, @sessionId, @chunkId, @lesson, @whyNonObvious, @category,
+      @confidence, @evidenceJson, @candidateId, @capturedAt, @metadataJson
+    )
+    ON CONFLICT(id) DO UPDATE SET
+      lesson = excluded.lesson,
+      why_non_obvious = excluded.why_non_obvious,
+      category = excluded.category,
+      confidence = excluded.confidence,
+      evidence_json = excluded.evidence_json,
+      candidate_id = excluded.candidate_id,
+      metadata_json = excluded.metadata_json`,
+  )
+  const write = database.transaction((items: TranscriptFinding[]) => {
+    for (const item of items) {
+      const finding = transcriptFindingSchema.parse(item)
+      insert.run({
+        ...finding,
+        evidenceJson: JSON.stringify(finding.evidence),
+        metadataJson: JSON.stringify(finding.metadata),
+      })
+    }
+  })
+  write(findings)
 }
 
 export function getStorageStats(
