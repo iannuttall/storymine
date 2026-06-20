@@ -153,11 +153,20 @@ research mcp serve
 
 Keep MCP tools thin. Reusable behaviour belongs in `packages/core`; MCP and CLI should both call into that.
 
+## Agent Skill
+
+This repo includes a repo-local Codex skill:
+
+- `skills/research`: teaches agents how to collect signals, audit transcripts, promote findings, and export candidate feeds.
+
+Use it when an agent needs to operate this CLI without reading the whole repo.
+
 ## Repo Map
 
 - `packages/core`: schemas, SQLite storage, collectors, transcript discovery/parsing/redaction/audit, candidate promotion/export.
 - `packages/cli`: `research` command, argument parsing, terminal output.
 - `packages/mcp`: MCP stdio server exposing core tools.
+- `skills`: repo-local agent skills for using `research`.
 - `plans`: product and implementation plans.
 
 Important files:

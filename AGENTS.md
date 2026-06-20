@@ -84,7 +84,12 @@ Candidate promotion:
 - `packages/core`: reusable product logic.
 - `packages/cli`: `research` command and terminal output.
 - `packages/mcp`: MCP stdio server exposing safe core tools.
+- `skills`: repo-local Codex skills for using this tool from other agent sessions.
 - `plans`: planning/spec documents.
+
+Skills:
+
+- `skills/research/SKILL.md`: broad guide for agents using the CLI/MCP to collect signals, audit transcripts, promote candidates, and export feeds.
 
 Core areas:
 
