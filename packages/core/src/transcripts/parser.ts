@@ -121,12 +121,18 @@ function parseClaudeMessages(records: unknown[]): TranscriptMessage[] {
 function parseCodexMessages(records: unknown[]): TranscriptMessage[] {
   return records.flatMap((record) => {
     const object = asRecord(record)
+    if (asString(object.type) !== 'response_item') return []
     const payload = asRecord(object.payload)
+    if (asString(payload.type) !== 'message') return []
     const role = normalizeRole(asString(payload.role))
+    if (!['user', 'assistant'].includes(role)) return []
+    const phase = asString(payload.phase)
+    if (role === 'assistant' && phase && phase !== 'final_answer') return []
     const text =
       extractText(payload.content) ||
       extractText(payload.message) ||
       extractText(object.message)
+    if (!isUsefulConversationText(role, text)) return []
     if (!text) return []
     return [
       {
@@ -136,6 +142,22 @@ function parseCodexMessages(records: unknown[]): TranscriptMessage[] {
       },
     ]
   })
+}
+
+function isUsefulConversationText(
+  role: TranscriptMessage['role'],
+  text: string,
+): boolean {
+  if (!text) return false
+  if (role === 'user') {
+    const trimmed = text.trim()
+    if (trimmed.startsWith('# AGENTS.md instructions')) return false
+    if (trimmed.startsWith('<skill>')) return false
+    if (trimmed.startsWith('<subagent_notification>')) return false
+    if (trimmed.includes('<environment_context>')) return false
+    if (trimmed.includes('<permissions instructions>')) return false
+  }
+  return true
 }
 
 function findSessionId(

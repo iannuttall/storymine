@@ -1,4 +1,5 @@
 import {
+  deleteTranscriptChunksForSession,
   getDb,
   listTranscriptFiles,
   markTranscriptFileIndexed,
@@ -11,6 +12,8 @@ import { parseTranscriptFile } from './parser.js'
 export interface ProcessTranscriptOptions {
   limit?: number
   maxTokens?: number
+  provider?: 'claude' | 'codex'
+  force?: boolean
 }
 
 export interface ProcessTranscriptResult {
@@ -24,7 +27,11 @@ export function processTranscriptFiles(
 ): ProcessTranscriptResult {
   const database = getDb()
   const limit = Math.max(1, Math.min(options.limit ?? 20, 1000))
-  const files = listTranscriptFiles(database, { status: 'pending', limit })
+  const files = listTranscriptFiles(database, {
+    ...(options.provider ? { provider: options.provider } : {}),
+    ...(options.force ? {} : { status: 'pending' }),
+    limit,
+  })
   let sessions = 0
   let chunks = 0
 
@@ -41,6 +48,7 @@ export function processTranscriptFiles(
       ...(options.maxTokens ? { maxTokens: options.maxTokens } : {}),
     })
     upsertTranscriptSession(database, parsed.session)
+    deleteTranscriptChunksForSession(database, parsed.session.id)
     upsertTranscriptChunks(database, transcriptChunks)
     markTranscriptFileIndexed(database, file.id)
     sessions += 1

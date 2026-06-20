@@ -19,7 +19,75 @@ test('parseTranscriptFile extracts codex messages', () => {
         }),
         JSON.stringify({
           type: 'response_item',
-          payload: { role: 'assistant', content: [{ text: 'Use a store.' }] },
+          payload: {
+            type: 'message',
+            role: 'developer',
+            content: [{ type: 'input_text', text: 'Do hidden setup.' }],
+          },
+        }),
+        JSON.stringify({
+          type: 'event_msg',
+          payload: { type: 'agent_message', message: 'Duplicate event.' },
+        }),
+        JSON.stringify({
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [
+              {
+                type: 'input_text',
+                text: '# AGENTS.md instructions\n<environment_context />',
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: '<skill>noise</skill>' }],
+          },
+        }),
+        JSON.stringify({
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [
+              {
+                type: 'input_text',
+                text: '<subagent_notification>{}</subagent_notification>',
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: 'Build this.' }],
+          },
+        }),
+        JSON.stringify({
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'assistant',
+            phase: 'commentary',
+            content: [{ type: 'output_text', text: 'Running checks.' }],
+          },
+        }),
+        JSON.stringify({
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'assistant',
+            phase: 'final_answer',
+            content: [{ type: 'output_text', text: 'Use a store.' }],
+          },
         }),
       ].join('\n'),
     )
@@ -31,8 +99,13 @@ test('parseTranscriptFile extracts codex messages', () => {
     })
 
     assert.equal(parsed.session.id, 'codex_1')
-    assert.equal(parsed.messages.length, 1)
-    assert.equal(parsed.messages[0]?.text, 'Use a store.')
+    assert.deepEqual(
+      parsed.messages.map((message) => [message.role, message.text]),
+      [
+        ['user', 'Build this.'],
+        ['assistant', 'Use a store.'],
+      ],
+    )
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

@@ -30,7 +30,14 @@ test('collectAppUsageSignals groups app usage by hours', () => {
     )
     insert.run('/app/usage', 'Codex', nowApple - 3600, nowApple)
     insert.run('/app/usage', 'Codex', nowApple - 7200, nowApple - 3600)
-    insert.run('/app/usage', 'Chrome', nowApple - 1800, nowApple)
+    insert.run('/app/usage', 'com.google.Chrome', nowApple - 1800, nowApple)
+    insert.run(
+      '/app/usage',
+      'com.google.Chrome.app.abcdefghijklmnop',
+      nowApple - 1800,
+      nowApple,
+    )
+    insert.run('/app/usage', 'Tiny', nowApple - 30, nowApple)
     insert.run('/other', 'Noise', nowApple - 1800, nowApple)
     db.close()
 
@@ -44,7 +51,8 @@ test('collectAppUsageSignals groups app usage by hours', () => {
     assert.equal(signals.length, 2)
     assert.equal(signals[0]?.title, 'Codex')
     assert.equal(signals[0]?.metadata.hours, 2)
-    assert.equal(signals[1]?.title, 'Chrome')
+    assert.equal(signals[1]?.title, 'Google Chrome')
+    assert.equal(signals[1]?.metadata.app, 'com.google.Chrome')
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

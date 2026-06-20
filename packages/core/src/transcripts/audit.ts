@@ -24,6 +24,7 @@ export interface AuditTranscriptOptions {
 
 export interface AuditTranscriptResult {
   chunksAudited: number
+  chunksFailed: number
   findings: number
 }
 
@@ -33,11 +34,16 @@ interface ParsedFinding {
   category: TranscriptFinding['category']
   confidence: number
   evidence: string[]
+  actionForAgent: string
+  reusableRule: string | null
 }
 
-export function createCommandAuditModel(command: string): TranscriptAuditModel {
+export function createCommandAuditModel(
+  command: string,
+  options: { timeoutMs?: number } = {},
+): TranscriptAuditModel {
   return {
-    complete: (prompt) => runCommandWithPrompt(command, prompt),
+    complete: (prompt) => runCommandWithPrompt(command, prompt, options),
   }
 }
 
@@ -48,6 +54,7 @@ export async function auditPendingTranscriptChunks(
   const limit = Math.max(1, Math.min(options.limit ?? 10, 100))
   const chunks = listTranscriptChunks(database, { status: 'pending', limit })
   let findingsCount = 0
+  let failedCount = 0
 
   for (const chunk of chunks) {
     try {
@@ -59,10 +66,15 @@ export async function auditPendingTranscriptChunks(
       findingsCount += findings.length
     } catch {
       markTranscriptChunkAuditStatus(database, chunk.id, 'failed')
+      failedCount += 1
     }
   }
 
-  return { chunksAudited: chunks.length, findings: findingsCount }
+  return {
+    chunksAudited: chunks.length,
+    chunksFailed: failedCount,
+    findings: findingsCount,
+  }
 }
 
 export function auditPromptForChunk(chunk: TranscriptChunk): string {
@@ -79,9 +91,13 @@ export function auditPromptForChunk(chunk: TranscriptChunk): string {
     '- workflow rules worth reusing',
     '',
     'Return JSON only with this shape:',
-    '{"findings":[{"lesson":"...","whyNonObvious":"...","category":"prompting|product|security|debugging|agent-behaviour|workflow","confidence":0.0,"evidence":["short paraphrased evidence"]}]}',
+    '{"findings":[{"lesson":"...","whyNonObvious":"...","category":"prompting|product|security|debugging|agent-behaviour|workflow","confidence":0.0,"actionForAgent":"...","reusableRule":"...","evidence":["short paraphrased evidence"]}]}',
     '',
     'Rules:',
+    '- Only include lessons that would change how a competent builder uses agents or ships product.',
+    '- Reject generic lessons like "write tests", "check errors", or "be clear" unless the transcript shows a specific reusable tactic.',
+    '- actionForAgent must be an imperative instruction another coding agent could follow.',
+    '- reusableRule should be a short rule of thumb the human could add to AGENTS.md, or null.',
     '- Evidence must be short paraphrases, not long transcript quotes.',
     '- Do not include secrets, credentials, private client details, or raw code.',
     '- Return an empty findings array if there is no useful lesson.',
@@ -102,6 +118,7 @@ export function parseAuditResponse(output: string): ParsedFinding[] {
     const category = transcriptFindingCategorySchema.safeParse(object.category)
     const lesson = asString(object.lesson)
     const confidence = asNumber(object.confidence)
+    const actionForAgent = asString(object.actionForAgent)
     const evidence = Array.isArray(object.evidence)
       ? object.evidence
           .map(asString)
@@ -111,6 +128,7 @@ export function parseAuditResponse(output: string): ParsedFinding[] {
       !lesson ||
       !category.success ||
       confidence === null ||
+      !actionForAgent ||
       evidence.length === 0
     ) {
       return []
@@ -121,6 +139,8 @@ export function parseAuditResponse(output: string): ParsedFinding[] {
         whyNonObvious: asString(object.whyNonObvious),
         category: category.data,
         confidence: Math.max(0, Math.min(confidence, 1)),
+        actionForAgent,
+        reusableRule: asString(object.reusableRule),
         evidence: evidence.slice(0, 5),
       },
     ]
@@ -150,6 +170,8 @@ function findingToRecord(
     metadata: {
       provider: chunk.provider,
       chunkSequence: chunk.sequence,
+      actionForAgent: finding.actionForAgent,
+      reusableRule: finding.reusableRule,
     },
   }
 }
@@ -157,12 +179,21 @@ function findingToRecord(
 function runCommandWithPrompt(
   command: string,
   prompt: string,
+  options: { timeoutMs?: number } = {},
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    let settled = false
     const child = spawn(command, {
       shell: true,
       stdio: ['pipe', 'pipe', 'pipe'],
     })
+    const timeoutMs = Math.max(1_000, options.timeoutMs ?? 120_000)
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      child.kill('SIGTERM')
+      reject(new Error(`Model command timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
     let stdout = ''
     let stderr = ''
     child.stdout.setEncoding('utf8')
@@ -173,8 +204,16 @@ function runCommandWithPrompt(
     child.stderr.on('data', (chunk: string) => {
       stderr += chunk
     })
-    child.on('error', reject)
+    child.on('error', (error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      reject(error)
+    })
     child.on('close', (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
       if (code === 0) {
         resolve(stdout)
       } else {

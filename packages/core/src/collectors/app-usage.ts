@@ -17,6 +17,7 @@ export interface AppUsageOptions {
   dbPath?: string
   days?: number
   limit?: number
+  minSeconds?: number
   now?: Date
 }
 
@@ -45,6 +46,7 @@ export function collectAppUsageSignals(
 
   const days = clampInt(options.days ?? 7, 1, 30)
   const limit = clampInt(options.limit ?? 30, 1, 200)
+  const minSeconds = clampInt(options.minSeconds ?? 60, 0, 86_400)
   const now = options.now ?? new Date()
   const nowUnixSeconds = Math.floor(now.getTime() / 1000)
   const sinceAppleSeconds =
@@ -66,24 +68,27 @@ export function collectAppUsageSignals(
           AND ZSTARTDATE > @sinceAppleSeconds
           AND ZENDDATE > ZSTARTDATE
         GROUP BY ZVALUESTRING
+        HAVING SUM(ZENDDATE - ZSTARTDATE) >= @minSeconds
         ORDER BY seconds DESC
         LIMIT @limit`,
       )
-      .all({ sinceAppleSeconds, limit }) as AppUsageRow[]
+      .all({ sinceAppleSeconds, minSeconds, limit }) as AppUsageRow[]
 
-    const maxSeconds = Math.max(...rows.map((row) => row.seconds), 1)
-    return rows.map((row) =>
+    const filtered = rows.filter((row) => !isNoisyApp(row.app))
+    const maxSeconds = Math.max(...filtered.map((row) => row.seconds), 1)
+    return filtered.map((row) =>
       signalSchema.parse({
         id: stableId(['app-usage', row.app, days, capturedAt.slice(0, 10)]),
         source: 'app-usage',
         signalType: 'app',
-        title: row.app,
+        title: friendlyAppName(row.app),
         summary: `${row.hours.toFixed(1)} hours used over ${days} days`,
         capturedAt,
         privacyLevel: 'private',
         weight: Math.min(row.seconds / maxSeconds, 1),
         metadata: {
           app: row.app,
+          displayName: friendlyAppName(row.app),
           seconds: Math.round(row.seconds),
           hours: row.hours,
           days,
@@ -105,6 +110,7 @@ export function collectAndStoreAppUsage(
     options: {
       days: options.days ?? 7,
       limit: options.limit ?? 30,
+      minSeconds: options.minSeconds ?? 60,
       dbPath: options.dbPath ? '[custom]' : '[default]',
     },
   })
@@ -133,4 +139,34 @@ export function collectAndStoreAppUsage(
 function clampInt(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min
   return Math.max(min, Math.min(Math.trunc(value), max))
+}
+
+function isNoisyApp(value: string): boolean {
+  return value.startsWith('com.google.Chrome.app.')
+}
+
+function friendlyAppName(value: string): string {
+  const names: Record<string, string> = {
+    'com.1password.1password': '1Password',
+    'com.anthropic.claudefordesktop': 'Claude',
+    'com.apple.dt.Xcode': 'Xcode',
+    'com.apple.finder': 'Finder',
+    'com.apple.mail': 'Mail',
+    'com.apple.Preview': 'Preview',
+    'com.apple.systempreferences': 'System Settings',
+    'com.bohemiancoding.sketch3': 'Sketch',
+    'com.conductor.app': 'Conductor',
+    'com.google.Chrome': 'Google Chrome',
+    'com.microsoft.VSCode': 'VS Code',
+    'com.mitchellh.ghostty': 'Ghostty',
+    'com.openai.codex': 'Codex',
+    'com.tinyspeck.slackmacgap': 'Slack',
+    'de.beyondco.herd': 'Herd',
+    'dev.warp.Warp-Stable': 'Warp',
+    'net.whatsapp.WhatsApp': 'WhatsApp',
+    'ru.keepcoder.Telegram': 'Telegram',
+  }
+  return (
+    names[value] ?? value.replace(/^com\.google\.Chrome\.app\./, 'Chrome App ')
+  )
 }

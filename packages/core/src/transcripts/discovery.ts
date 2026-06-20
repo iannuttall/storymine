@@ -48,7 +48,6 @@ export function discoverTranscriptFiles(
         ? join(options.claudeRoot ?? defaultClaudeRoot(), 'projects')
         : join(options.codexRoot ?? defaultCodexRoot(), 'sessions')
     for (const path of walkJsonlFiles(root)) {
-      if (files.length >= limit) return sortByModified(files)
       const stat = statSync(path)
       if (options.since && stat.mtime < options.since) continue
       files.push(
@@ -67,7 +66,7 @@ export function discoverTranscriptFiles(
     }
   }
 
-  return sortByModified(files)
+  return sortByModified(files).slice(0, limit)
 }
 
 export function indexTranscriptFiles(

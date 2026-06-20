@@ -34,11 +34,17 @@ export const candidatesCommand = defineCommand({
           default: false,
           description: 'Print structured JSON',
         },
+        force: {
+          type: 'boolean',
+          default: false,
+          description: 'Rebuild candidates for already-promoted findings',
+        },
       },
       run: ({ args }) => {
         const result = promoteTranscriptFindings({
           minConfidence: floatArg(args.minConfidence, 0.7, { min: 0, max: 1 }),
           limit: numberArg(args.limit, 25, { min: 1, max: 500 }),
+          force: Boolean(args.force),
         })
         if (jsonFlag(args)) {
           printJson(result)

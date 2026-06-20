@@ -23,9 +23,17 @@ const defaultNoiseHosts = [
   'localhost',
   '127.0.0.1',
   '0.0.0.0',
+  'adsense.com',
+  'app.ahrefs.com',
+  'appstoreconnect.apple.com',
+  'ap.www.namecheap.com',
+  'clicky.com',
+  'dashboard.stripe.com',
+  'dashboard.raptive.com',
   'google.com',
   'mail.google.com',
   'gmail.com',
+  'session.bbc.co.uk',
 ]
 
 const defaultNoiseHostFragments = [
@@ -34,6 +42,13 @@ const defaultNoiseHostFragments = [
   'console.cloud.google.com',
   'dash.cloudflare.com',
   'github.com/settings',
+  'iron.iann.workers.dev/dashboard',
+  'keep.md/settings',
+  'www.namecheap.com/twofa',
+  'twitter.com',
+  'x.com/home',
+  'x.com/i/chat',
+  'x.com/notifications',
 ]
 
 export interface ChromeHistoryOptions {
@@ -57,6 +72,10 @@ interface ChromeHistoryRow {
   visitCount: number
   typedCount: number
   lastVisitTime: number
+}
+
+interface AggregatedHistoryRow extends ChromeHistoryRow {
+  canonicalUrl: string
 }
 
 export function defaultChromeHistoryPath(): string {
@@ -147,34 +166,35 @@ export function collectChromeHistorySignals(
         )
         .all({ sinceChromeTime, queryLimit: limit * 4 }) as ChromeHistoryRow[]
 
-      const filtered = rows
-        .filter(
+      const filtered = aggregateHistoryRows(
+        rows.filter(
           (row) =>
             options.includeNoise ||
             !isNoisyHistoryUrl(row.url, historyNoiseOptions(options)),
-        )
-        .slice(0, limit)
+        ),
+      ).slice(0, limit)
 
       const maxVisits = Math.max(...filtered.map((row) => row.visitCount), 1)
       return filtered.map((row) => {
-        const url = new URL(row.url)
+        const url = new URL(row.canonicalUrl)
         return signalSchema.parse({
           id: stableId([
             'search-history',
-            row.url,
+            row.canonicalUrl,
             row.lastVisitTime,
             capturedAt.slice(0, 10),
           ]),
           source: 'search-history',
           signalType: 'visited-url',
           title: row.title,
-          url: row.url,
+          url: row.canonicalUrl,
           summary: `${row.visitCount} visits in the last ${days} days`,
           capturedAt,
           privacyLevel: 'private',
           weight: Math.min(row.visitCount / maxVisits, 1),
           metadata: {
             host: url.hostname,
+            canonicalUrl: row.canonicalUrl,
             visitCount: row.visitCount,
             typedCount: row.typedCount,
             lastVisitedAt: dateFromChromeTime(row.lastVisitTime).toISOString(),
@@ -196,6 +216,45 @@ function historyNoiseOptions(
     ...(options.excludeHostFragments
       ? { excludeHostFragments: options.excludeHostFragments }
       : {}),
+  }
+}
+
+function aggregateHistoryRows(
+  rows: ChromeHistoryRow[],
+): AggregatedHistoryRow[] {
+  const byUrl = new Map<string, AggregatedHistoryRow>()
+  for (const row of rows) {
+    const canonicalUrl = canonicalizeHistoryUrl(row.url)
+    if (!canonicalUrl) continue
+    const existing = byUrl.get(canonicalUrl)
+    if (!existing) {
+      byUrl.set(canonicalUrl, { ...row, canonicalUrl })
+      continue
+    }
+    existing.visitCount += row.visitCount
+    existing.typedCount += row.typedCount
+    if (row.lastVisitTime > existing.lastVisitTime) {
+      existing.title = row.title
+      existing.lastVisitTime = row.lastVisitTime
+      existing.url = row.url
+    }
+  }
+  return [...byUrl.values()].sort(
+    (a, b) => b.visitCount - a.visitCount || b.lastVisitTime - a.lastVisitTime,
+  )
+}
+
+export function canonicalizeHistoryUrl(value: string): string | null {
+  try {
+    const url = new URL(value)
+    url.hash = ''
+    url.search = ''
+    if (url.pathname.length > 1) {
+      url.pathname = url.pathname.replace(/\/+$/, '')
+    }
+    return url.toString()
+  } catch {
+    return null
   }
 }
 

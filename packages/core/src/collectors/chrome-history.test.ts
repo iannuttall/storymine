@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import Database from 'better-sqlite3'
 import {
+  canonicalizeHistoryUrl,
   chromeTimeFromDate,
   collectChromeHistorySignals,
   isNoisyHistoryUrl,
@@ -13,7 +14,16 @@ import {
 test('isNoisyHistoryUrl filters local and dashboard URLs', () => {
   assert.equal(isNoisyHistoryUrl('http://localhost:3000'), true)
   assert.equal(isNoisyHistoryUrl('https://mail.google.com/mail/u/0'), true)
+  assert.equal(isNoisyHistoryUrl('https://dashboard.stripe.com/'), true)
+  assert.equal(isNoisyHistoryUrl('https://keep.md/settings'), true)
   assert.equal(isNoisyHistoryUrl('https://example.com/article'), false)
+})
+
+test('canonicalizeHistoryUrl removes tracking-only URL parts', () => {
+  assert.equal(
+    canonicalizeHistoryUrl('https://example.com/article/?utm_source=x#top'),
+    'https://example.com/article',
+  )
 })
 
 test('collectChromeHistorySignals copies and filters history rows', () => {
@@ -38,11 +48,18 @@ test('collectChromeHistorySignals copies and filters history rows', () => {
     )
     const now = new Date('2026-06-20T10:00:00.000Z')
     insert.run(
-      'https://example.com/useful-tool',
+      'https://example.com/useful-tool?ref=one',
       'Useful Tool',
       8,
       1,
       chromeTimeFromDate(now),
+    )
+    insert.run(
+      'https://example.com/useful-tool?ref=two',
+      'Useful Tool Later',
+      4,
+      2,
+      chromeTimeFromDate(new Date('2026-06-20T10:01:00.000Z')),
     )
     insert.run(
       'http://localhost:8787',
@@ -68,9 +85,11 @@ test('collectChromeHistorySignals copies and filters history rows', () => {
     })
 
     assert.equal(signals.length, 1)
-    assert.equal(signals[0]?.title, 'Useful Tool')
+    assert.equal(signals[0]?.title, 'Useful Tool Later')
     assert.equal(signals[0]?.metadata.host, 'example.com')
-    assert.equal(signals[0]?.metadata.visitCount, 8)
+    assert.equal(signals[0]?.metadata.visitCount, 12)
+    assert.equal(signals[0]?.metadata.typedCount, 3)
+    assert.equal(signals[0]?.url, 'https://example.com/useful-tool')
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

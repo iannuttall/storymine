@@ -538,6 +538,15 @@ export function upsertTranscriptChunks(
   write(chunks)
 }
 
+export function deleteTranscriptChunksForSession(
+  database: Database.Database,
+  sessionId: string,
+): void {
+  database
+    .prepare(`DELETE FROM transcript_chunks WHERE session_id = @sessionId`)
+    .run({ sessionId })
+}
+
 export function markTranscriptFileIndexed(
   database: Database.Database,
   id: string,

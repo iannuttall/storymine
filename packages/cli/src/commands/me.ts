@@ -189,6 +189,11 @@ export const meCommand = defineCommand({
             description: 'Parse indexed transcript files into redacted chunks',
           },
           args: {
+            provider: {
+              type: 'string',
+              default: 'all',
+              description: 'Provider to parse: all, claude, or codex',
+            },
             limit: {
               type: 'string',
               default: '20',
@@ -204,14 +209,22 @@ export const meCommand = defineCommand({
               default: false,
               description: 'Print structured JSON',
             },
+            force: {
+              type: 'boolean',
+              default: false,
+              description: 'Reparse already indexed files',
+            },
           },
           run: ({ args }) => {
+            const providers = providersArg(String(args.provider ?? 'all'))
             const result = processTranscriptFiles({
               limit: numberArg(args.limit, 20, { min: 1, max: 1000 }),
               maxTokens: numberArg(args.maxTokens, 3500, {
                 min: 200,
                 max: 12_000,
               }),
+              ...(providers.length === 1 ? { provider: providers[0] } : {}),
+              force: Boolean(args.force),
             })
             if (jsonFlag(args)) {
               printJson(result)
@@ -244,6 +257,11 @@ export const meCommand = defineCommand({
               default: '10',
               description: 'Maximum pending chunks to audit',
             },
+            timeoutSeconds: {
+              type: 'string',
+              default: '120',
+              description: 'Per-chunk model timeout in seconds',
+            },
             json: {
               type: 'boolean',
               default: false,
@@ -259,15 +277,27 @@ export const meCommand = defineCommand({
             }
             const result = await auditPendingTranscriptChunks({
               limit: numberArg(args.limit, 10, { min: 1, max: 100 }),
-              model: createCommandAuditModel(command),
+              model: createCommandAuditModel(command, {
+                timeoutMs:
+                  numberArg(args.timeoutSeconds, 120, {
+                    min: 5,
+                    max: 1800,
+                  }) * 1000,
+              }),
             })
             if (jsonFlag(args)) {
               printJson(result)
               return
             }
             printTable(
-              ['Chunks', 'Findings'],
-              [[String(result.chunksAudited), String(result.findings)]],
+              ['Chunks', 'Failed', 'Findings'],
+              [
+                [
+                  String(result.chunksAudited),
+                  String(result.chunksFailed),
+                  String(result.findings),
+                ],
+              ],
             )
           },
         }),
