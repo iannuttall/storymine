@@ -1,0 +1,11 @@
+node_modules
+dist
+.turbo
+coverage
+*.log
+.env
+.env.*
+!.env.example
+tmp
+var
+

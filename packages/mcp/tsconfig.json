@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@research/core": ["../core/src/index.ts"]
+    },
+    "rootDir": "../..",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"]
+}
