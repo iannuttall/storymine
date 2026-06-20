@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 import { researchCoreVersion } from '@research/core'
 import { defineCommand, runMain } from 'citty'
+import { meCommand } from './commands/me.js'
 
 const main = defineCommand({
   meta: {
     name: 'research',
     version: researchCoreVersion,
     description: 'Local-first research collection CLI',
+  },
+  subCommands: {
+    me: meCommand,
   },
   run: () => {
     process.stdout.write(
