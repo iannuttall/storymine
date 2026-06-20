@@ -62,10 +62,18 @@ export function renderCandidatesMarkdown(candidates: Candidate[]): string {
     lines.push(`- Source: ${candidate.source}`)
     lines.push(`- Tier: ${candidate.tier}`)
     if (candidate.score !== null) lines.push(`- Score: ${candidate.score}`)
+    const alphaType = asString(candidate.provenance.alphaType)
+    if (alphaType) lines.push(`- Alpha type: ${alphaType}`)
+    const alphaScore = asNumber(candidate.provenance.alphaScore)
+    if (alphaScore !== null) lines.push(`- Alpha score: ${alphaScore}`)
     lines.push(`- Summary: ${candidate.oneLiner}`)
     lines.push(`- Why this matters: ${candidate.whyInteresting}`)
     const actionForAgent = asString(candidate.provenance.actionForAgent)
-    if (actionForAgent) lines.push(`- Action for agent: ${actionForAgent}`)
+    if (actionForAgent) lines.push(`- Better move: ${actionForAgent}`)
+    const mistakeToAvoid = asString(candidate.provenance.mistakeToAvoid)
+    if (mistakeToAvoid) lines.push(`- Avoid: ${mistakeToAvoid}`)
+    const examplePrompt = asString(candidate.provenance.examplePrompt)
+    if (examplePrompt) lines.push(`- Example prompt: ${examplePrompt}`)
     const reusableRule = asString(candidate.provenance.reusableRule)
     if (reusableRule) lines.push(`- Reusable rule: ${reusableRule}`)
     const evidence = asStringArray(candidate.provenance.evidence)
@@ -89,6 +97,10 @@ export function renderCandidatesMarkdown(candidates: Candidate[]): string {
 export function candidateFromFinding(finding: TranscriptFinding): Candidate {
   const actionForAgent = asString(finding.metadata.actionForAgent)
   const reusableRule = asString(finding.metadata.reusableRule)
+  const mistakeToAvoid = asString(finding.metadata.mistakeToAvoid)
+  const examplePrompt = asString(finding.metadata.examplePrompt)
+  const alphaScore = asNumber(finding.metadata.alphaScore)
+  const alphaType = asString(finding.metadata.alphaType)
   return candidateSchema.parse({
     id: stableId(['candidate', 'transcript', finding.id]),
     source: 'transcript',
@@ -100,6 +112,7 @@ export function candidateFromFinding(finding: TranscriptFinding): Candidate {
     tier: 'discovery',
     metrics: {
       confidence: finding.confidence,
+      ...(alphaScore !== null ? { alphaScore } : {}),
     },
     provenance: {
       findingId: finding.id,
@@ -109,6 +122,10 @@ export function candidateFromFinding(finding: TranscriptFinding): Candidate {
       evidence: finding.evidence,
       ...(actionForAgent ? { actionForAgent } : {}),
       ...(reusableRule ? { reusableRule } : {}),
+      ...(mistakeToAvoid ? { mistakeToAvoid } : {}),
+      ...(examplePrompt ? { examplePrompt } : {}),
+      ...(alphaScore !== null ? { alphaScore } : {}),
+      ...(alphaType ? { alphaType } : {}),
     },
     capturedAt: nowIso(),
     score: null,
@@ -153,6 +170,10 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : []
+}
+
+function asNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 function titleFromLesson(lesson: string): string {

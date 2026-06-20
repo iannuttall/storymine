@@ -5,6 +5,7 @@ import {
   createCommandAuditModel,
   indexTranscriptFiles,
   processTranscriptFiles,
+  resetTranscriptAuditData,
 } from '@research/core'
 import { defineCommand } from 'citty'
 import { jsonFlag, numberArg, stringArg } from '../args.js'
@@ -296,6 +297,47 @@ export const meCommand = defineCommand({
                   String(result.chunksAudited),
                   String(result.chunksFailed),
                   String(result.findings),
+                ],
+              ],
+            )
+          },
+        }),
+        'reset-audit': defineCommand({
+          meta: {
+            name: 'reset-audit',
+            description:
+              'Clear transcript findings/candidates and reset chunks to pending',
+          },
+          args: {
+            yes: {
+              type: 'boolean',
+              default: false,
+              description: 'Confirm deletion without prompting',
+            },
+            json: {
+              type: 'boolean',
+              default: false,
+              description: 'Print structured JSON',
+            },
+          },
+          run: ({ args }) => {
+            if (!args.yes) {
+              throw new Error(
+                'Refusing to reset transcript audit without --yes',
+              )
+            }
+            const result = resetTranscriptAuditData()
+            if (jsonFlag(args)) {
+              printJson(result)
+              return
+            }
+            printTable(
+              ['Candidates', 'Findings', 'Chunks reset'],
+              [
+                [
+                  String(result.candidatesDeleted),
+                  String(result.findingsDeleted),
+                  String(result.chunksReset),
                 ],
               ],
             )

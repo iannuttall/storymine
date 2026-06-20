@@ -704,6 +704,31 @@ export function attachCandidateToFinding(
     .run({ findingId, candidateId })
 }
 
+export function resetTranscriptAuditData(
+  database: Database.Database = getDb(),
+): {
+  candidatesDeleted: number
+  findingsDeleted: number
+  chunksReset: number
+} {
+  const candidates = database
+    .prepare(`DELETE FROM candidates WHERE source = 'transcript'`)
+    .run()
+  const findings = database.prepare(`DELETE FROM transcript_findings`).run()
+  const chunks = database
+    .prepare(
+      `UPDATE transcript_chunks
+       SET audit_status = 'pending'
+       WHERE audit_status != 'pending'`,
+    )
+    .run()
+  return {
+    candidatesDeleted: candidates.changes,
+    findingsDeleted: findings.changes,
+    chunksReset: chunks.changes,
+  }
+}
+
 export function getStorageStats(
   database: Database.Database = getDb(),
   dbPath = getResearchPaths().cacheDbFile,

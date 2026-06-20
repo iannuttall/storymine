@@ -12,14 +12,19 @@ test('parseAuditResponse validates model JSON findings', () => {
     JSON.stringify({
       findings: [
         {
-          lesson: 'Use review prompts to catch agent drift.',
-          whyNonObvious: 'The useful part is the correction loop.',
+          quickTip:
+            'Ask the AI to challenge its own plan before it writes code.',
+          whyItWorks: 'The useful part is the correction loop.',
+          mistakeToAvoid:
+            'Letting a broad plan become implementation too soon.',
+          betterMove:
+            'Ask for a critique pass that finds weak assumptions first.',
+          examplePrompt:
+            'Before coding, list the risky assumptions in your plan and what would prove them wrong.',
+          alphaType: 'course-correction',
+          alphaScore: 0.9,
           category: 'prompting',
           confidence: 0.8,
-          actionForAgent:
-            'Ask for a review pass that challenges the implementation.',
-          reusableRule:
-            'Run a critique pass before accepting broad agent changes.',
           evidence: ['The user rejected a broad implementation.'],
         },
       ],
@@ -30,8 +35,13 @@ test('parseAuditResponse validates model JSON findings', () => {
   assert.equal(findings[0]?.category, 'prompting')
   assert.equal(
     findings[0]?.actionForAgent,
-    'Ask for a review pass that challenges the implementation.',
+    'Ask for a critique pass that finds weak assumptions first.',
   )
+  assert.equal(
+    findings[0]?.examplePrompt,
+    'Before coding, list the risky assumptions in your plan and what would prove them wrong.',
+  )
+  assert.equal(findings[0]?.alphaScore, 0.9)
 })
 
 test('auditPromptForChunk includes redaction contract', () => {
@@ -50,8 +60,33 @@ test('auditPromptForChunk includes redaction contract', () => {
 
   assert.match(prompt, /Return JSON only/)
   assert.match(prompt, /redacted transcript chunk/)
-  assert.match(prompt, /actionForAgent/)
-  assert.match(prompt, /Reject generic lessons/)
+  assert.match(prompt, /quickTip/)
+  assert.match(prompt, /examplePrompt/)
+  assert.match(prompt, /AI-usage alpha/)
+  assert.match(prompt, /alphaScore/)
+})
+
+test('parseAuditResponse rejects low-alpha findings', () => {
+  const findings = parseAuditResponse(
+    JSON.stringify({
+      findings: [
+        {
+          quickTip: 'Use an indexer for transcript processing.',
+          whyItWorks: 'It is more scalable.',
+          mistakeToAvoid: 'Processing too much data at once.',
+          betterMove: 'Build an indexer.',
+          examplePrompt: 'Build an indexer.',
+          alphaType: 'verification-loop',
+          alphaScore: 0.4,
+          category: 'workflow',
+          confidence: 0.9,
+          evidence: ['The project used an indexer.'],
+        },
+      ],
+    }),
+  )
+
+  assert.equal(findings.length, 0)
 })
 
 test('model interface supports deterministic fake adapters', async () => {
@@ -60,19 +95,29 @@ test('model interface supports deterministic fake adapters', async () => {
       JSON.stringify({
         findings: [
           {
-            lesson: 'Keep CLI wrappers thin.',
-            category: 'workflow',
+            quickTip:
+              'Ask the AI to justify copied patterns before accepting them.',
+            whyItWorks: 'It catches cargo-culting from nearby examples.',
+            mistakeToAvoid: 'Letting the AI copy sibling-project tooling.',
+            betterMove:
+              'Ask why the copied pattern fits this project and workflow.',
+            examplePrompt:
+              'Why does this pattern fit this repo instead of a simpler option?',
+            alphaType: 'agent-failure',
+            alphaScore: 0.85,
+            category: 'agent-behaviour',
             confidence: 0.7,
-            actionForAgent:
-              'Put shared behavior in core and keep clients as wrappers.',
-            evidence: ['Core owned the behavior.'],
+            evidence: ['The AI copied build tooling from another project.'],
           },
         ],
       }),
   }
 
   const output = await model.complete('prompt')
-  assert.equal(parseAuditResponse(output)[0]?.lesson, 'Keep CLI wrappers thin.')
+  assert.equal(
+    parseAuditResponse(output)[0]?.lesson,
+    'Ask the AI to justify copied patterns before accepting them.',
+  )
 })
 
 test('createCommandAuditModel times out slow commands', async () => {

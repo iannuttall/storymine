@@ -16,7 +16,12 @@ test('renderCandidatesMarkdown produces agent-readable markdown', () => {
       metrics: {},
       provenance: {
         category: 'prompting',
-        actionForAgent: 'Run a critical review pass before committing.',
+        alphaType: 'course-correction',
+        alphaScore: 0.9,
+        actionForAgent: 'Ask the AI to critique the plan before coding.',
+        mistakeToAvoid: 'Accepting broad implementation plans too quickly.',
+        examplePrompt:
+          'Before coding, critique this plan and list the assumptions.',
         reusableRule: 'Challenge broad agent changes before accepting them.',
         evidence: ['The user corrected the agent after it drifted.'],
       },
@@ -28,6 +33,9 @@ test('renderCandidatesMarkdown produces agent-readable markdown', () => {
 
   assert.match(markdown, /Correct agent drift/)
   assert.match(markdown, /Use review prompts/)
-  assert.match(markdown, /Action for agent/)
-  assert.match(markdown, /Run a critical review pass/)
+  assert.match(markdown, /Alpha type/)
+  assert.match(markdown, /Alpha score/)
+  assert.match(markdown, /Better move/)
+  assert.match(markdown, /Ask the AI to critique/)
+  assert.match(markdown, /Example prompt/)
 })

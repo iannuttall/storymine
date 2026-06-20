@@ -36,6 +36,10 @@ interface ParsedFinding {
   evidence: string[]
   actionForAgent: string
   reusableRule: string | null
+  mistakeToAvoid: string | null
+  examplePrompt: string | null
+  alphaScore: number
+  alphaType: string | null
 }
 
 export function createCommandAuditModel(
@@ -79,28 +83,49 @@ export async function auditPendingTranscriptChunks(
 
 export function auditPromptForChunk(chunk: TranscriptChunk): string {
   return [
-    'You are auditing a redacted transcript chunk from AI-assisted product building.',
+    'You are auditing a redacted transcript chunk from someone using an AI coding agent.',
     '',
-    'Extract useful, non-obvious lessons for founders, marketers, and operators who want to get better at using AI agents without blindly following them.',
+    'Your job is to find AI-usage alpha: short, practical tips that help a broad audience get better output from ChatGPT, Claude, Codex, or other AI assistants.',
     '',
-    'Look for:',
-    '- security concerns or privacy risks that were caught',
-    '- agent mistakes and how the human corrected them',
-    '- product-quality lessons',
-    '- debugging patterns',
-    '- workflow rules worth reusing',
+    'The audience does not care about this repo, product, codebase, or implementation detail. They care about the reusable human move that improved the AI interaction.',
+    '',
+    'Look for high-alpha moments like:',
+    '- the human stopped the AI from blindly implementing the wrong thing',
+    '- the human asked to inspect real data/output before coding from assumptions',
+    '- the human forced the AI to narrow scope, define acceptance criteria, or produce a plan first',
+    '- the human caught an agent failure mode: cargo-culting, overbuilding, hallucinated certainty, weak defaults, hidden privacy risk, or shallow validation',
+    '- the human used a prompt pattern others could copy tomorrow',
+    '- the human turned a messy transcript/result into a clearer rule, checklist, or review loop',
+    '',
+    'Reject low-alpha material:',
+    '- product-specific architecture choices',
+    '- implementation notes that only matter in this repo',
+    '- generic advice such as "write tests", "be clear", "check errors", or "review output"',
+    '- summaries of what happened without a reusable behaviour change',
+    '- tips that require knowing private context, file names, or project details',
     '',
     'Return JSON only with this shape:',
-    '{"findings":[{"lesson":"...","whyNonObvious":"...","category":"prompting|product|security|debugging|agent-behaviour|workflow","confidence":0.0,"actionForAgent":"...","reusableRule":"...","evidence":["short paraphrased evidence"]}]}',
+    '{"findings":[{"quickTip":"...","whyItWorks":"...","mistakeToAvoid":"...","betterMove":"...","examplePrompt":"...","alphaType":"course-correction|prompt-pattern|verification-loop|scope-control|agent-failure|privacy-safety|context-management","alphaScore":0.0,"category":"prompting|product|security|debugging|agent-behaviour|workflow","confidence":0.0,"evidence":["short paraphrased evidence"]}]}',
     '',
     'Rules:',
-    '- Only include lessons that would change how a competent builder uses agents or ships product.',
-    '- Reject generic lessons like "write tests", "check errors", or "be clear" unless the transcript shows a specific reusable tactic.',
-    '- actionForAgent must be an imperative instruction another coding agent could follow.',
-    '- reusableRule should be a short rule of thumb the human could add to AGENTS.md, or null.',
+    '- Return at most 3 findings. Prefer 0 good findings over 5 weak ones.',
+    '- alphaScore is audience value from 0 to 1. Only include findings with alphaScore >= 0.7.',
+    '- quickTip must be useful to someone using AI tomorrow, even if they are not building this product.',
+    '- Write quickTip as a general tip, not as "in this project..." or "for this repo...".',
+    '- betterMove must be the concrete human move that improves the AI interaction.',
+    '- examplePrompt should be a short prompt or instruction the human could actually paste into an AI chat.',
+    '- mistakeToAvoid should name the bad habit or trap.',
+    '- Keep each field concise, punchy, and newsletter-friendly.',
+    '- Translate concrete project details into general AI-use advice.',
     '- Evidence must be short paraphrases, not long transcript quotes.',
     '- Do not include secrets, credentials, private client details, or raw code.',
     '- Return an empty findings array if there is no useful lesson.',
+    '',
+    'Bad quickTip: "Use an incremental indexer for transcript processing."',
+    'Good quickTip: "Before asking AI to process a pile of data, make it measure the pile first."',
+    '',
+    'Bad quickTip: "Keep CLI wrappers thin."',
+    'Good quickTip: "When AI copies a pattern from another project, ask it to justify why that pattern fits this one."',
     '',
     `Provider: ${chunk.provider}`,
     `Session: ${chunk.sessionId}`,
@@ -116,9 +141,11 @@ export function parseAuditResponse(output: string): ParsedFinding[] {
   return rawFindings.flatMap((item) => {
     const object = asRecord(item)
     const category = transcriptFindingCategorySchema.safeParse(object.category)
-    const lesson = asString(object.lesson)
+    const lesson = asString(object.quickTip) ?? asString(object.lesson)
     const confidence = asNumber(object.confidence)
-    const actionForAgent = asString(object.actionForAgent)
+    const alphaScore = asNumber(object.alphaScore)
+    const actionForAgent =
+      asString(object.betterMove) ?? asString(object.actionForAgent)
     const evidence = Array.isArray(object.evidence)
       ? object.evidence
           .map(asString)
@@ -128,6 +155,8 @@ export function parseAuditResponse(output: string): ParsedFinding[] {
       !lesson ||
       !category.success ||
       confidence === null ||
+      alphaScore === null ||
+      alphaScore < 0.7 ||
       !actionForAgent ||
       evidence.length === 0
     ) {
@@ -136,11 +165,16 @@ export function parseAuditResponse(output: string): ParsedFinding[] {
     return [
       {
         lesson,
-        whyNonObvious: asString(object.whyNonObvious),
+        whyNonObvious:
+          asString(object.whyItWorks) ?? asString(object.whyNonObvious),
         category: category.data,
         confidence: Math.max(0, Math.min(confidence, 1)),
         actionForAgent,
-        reusableRule: asString(object.reusableRule),
+        reusableRule: asString(object.reusableRule) ?? lesson,
+        mistakeToAvoid: asString(object.mistakeToAvoid),
+        examplePrompt: asString(object.examplePrompt),
+        alphaScore: Math.max(0, Math.min(alphaScore, 1)),
+        alphaType: asString(object.alphaType),
         evidence: evidence.slice(0, 5),
       },
     ]
@@ -172,6 +206,10 @@ function findingToRecord(
       chunkSequence: chunk.sequence,
       actionForAgent: finding.actionForAgent,
       reusableRule: finding.reusableRule,
+      mistakeToAvoid: finding.mistakeToAvoid,
+      examplePrompt: finding.examplePrompt,
+      alphaScore: finding.alphaScore,
+      alphaType: finding.alphaType,
     },
   }
 }
