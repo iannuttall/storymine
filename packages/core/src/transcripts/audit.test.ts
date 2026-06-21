@@ -90,6 +90,8 @@ test('auditPromptForChunk includes redaction contract', () => {
   assert.match(prompt, /skillPotential/)
   assert.match(prompt, /pushed back/)
   assert.match(prompt, /smart beginners/)
+  assert.match(prompt, /slogans/)
+  assert.match(prompt, /execution loop/)
 })
 
 test('parseAuditResponse rejects low-alpha findings', () => {

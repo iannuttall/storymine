@@ -39,6 +39,7 @@ Good transcript findings look like:
 - intervention moments where the human caught AI drift, named the bad pattern, and forced a better next move
 - technical lessons explained in plain English for smart beginners, not only developers
 - repeated UI, performance, debugging, research, or workflow rules that could become future skills
+- direct titles that name the exact prompt move, not slogans or vague contrast lines
 
 Weak findings:
 
@@ -238,6 +239,7 @@ Before calling candidate output "good", check:
 - Are stop/steer/pushback/reminder moments labelled clearly enough to review later?
 - Can a non-technical but serious reader understand why the tip matters?
 - Could this become a reusable skill/checklist/rule for future agents?
+- Does the title say the actual instruction, or is it just a friendly phrase?
 
 The next major quality improvement should come from reviewed examples: run more real project audits, have the human mark strong/weak findings, then add those examples back into the audit or curation prompt.
 

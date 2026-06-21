@@ -122,6 +122,8 @@ The best findings are usually intervention moments: the exact instruction, const
 
 Good findings can be technical, but they should be explainable to smart beginners. For example, "prompt for idempotence" is better framed as "ask AI to make expensive work restartable so failed runs do not waste completed work." Repeated UI, performance, debugging, and workflow findings can later become reusable agent skills.
 
+Do not flatten strong findings into vague slogans. "Give agents a finish line, not just a task list" is weaker than "Ask AI to turn a plan into an execution loop: do one task, test it, commit it, then move to the next." The title should carry the actual prompt move.
+
 ## Search And Semantic Retrieval Direction
 
 The extraction pipeline should eventually have two retrieval layers:

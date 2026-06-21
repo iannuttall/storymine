@@ -98,6 +98,20 @@ export const promptingAlphaFixtures: PromptingAlphaFixture[] = [
       'Design this so it can safely restart: save completed results, skip work already done, retry failed items, and explain what happens if the run is interrupted.',
   },
   {
+    id: 'plan-to-execution-loop',
+    label: 'strong',
+    quickTip:
+      'Ask AI to turn a plan into an execution loop: do one task, test it, commit it, then continue.',
+    alphaType: 'scope-control',
+    interventionType: 'steer',
+    plainEnglishWhy:
+      'It stops the AI handing back a plan and makes it work through each step with proof before moving on.',
+    skillPotential: 'workflow',
+    why: 'The useful lesson is the loop structure: implement one task, verify it, commit it, then continue until the plan is complete.',
+    examplePrompt:
+      'Convert this plan into a checklist. For each item, implement it, run the relevant checks, make a focused commit, then move to the next item until everything is complete.',
+  },
+  {
     id: 'remove-ui-choices-before-polish',
     label: 'strong',
     quickTip:

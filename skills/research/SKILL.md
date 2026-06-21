@@ -85,11 +85,13 @@ Prefer findings like:
 - Label the intervention type: stop, steer, pushback, reminder, scope-reset, or validation-demand.
 - Explain technical alpha in plain English for smart beginners.
 - Mark repeated UI, performance, debugging, research, or workflow lessons as future skill material.
+- Use direct titles that name the concrete prompt move; avoid slogans, idioms, and vague "not just" contrast lines.
 
 Reject or down-rank:
 
 - product-specific architecture choices
 - implementation notes that only matter in one repo
+- pithy headlines that sound friendly but do not explain the prompting move
 - generic advice like "write tests" without a sharper AI-specific move
 - summaries of a chat without a reusable behaviour change
 - private details or raw transcript quotes
