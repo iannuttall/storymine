@@ -23,3 +23,18 @@ test('research --help prints command help', () => {
   assert.match(result.stdout, /me/)
   assert.match(result.stdout, /candidates/)
 })
+
+test('research me transcripts search --help prints search help', () => {
+  const distDir = dirname(fileURLToPath(import.meta.url))
+  const result = spawnSync(
+    process.execPath,
+    [join(distDir, 'index.js'), 'me', 'transcripts', 'search', '--help'],
+    {
+      encoding: 'utf8',
+    },
+  )
+
+  assert.equal(result.status, 0)
+  assert.match(result.stdout, /Search parsed transcript chunks/)
+  assert.match(result.stdout, /--query/)
+})

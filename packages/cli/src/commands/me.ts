@@ -3,9 +3,14 @@ import {
   collectAndStoreAppUsage,
   collectAndStoreChromeHistory,
   createCommandAuditModel,
+  getTranscriptChunkView,
   indexTranscriptFiles,
   processTranscriptFiles,
+  readTranscriptChunks,
+  renderTranscriptChunkMarkdown,
   resetTranscriptAuditData,
+  searchTranscriptChunks,
+  type TranscriptChunkView,
 } from '@research/core'
 import { defineCommand } from 'citty'
 import { jsonFlag, numberArg, stringArg } from '../args.js'
@@ -341,6 +346,149 @@ export const meCommand = defineCommand({
             )
           },
         }),
+        search: defineCommand({
+          meta: {
+            name: 'search',
+            description: 'Search parsed transcript chunks with provenance',
+          },
+          args: {
+            query: {
+              type: 'string',
+              description: 'Search query. Terms must all match somewhere.',
+            },
+            provider: {
+              type: 'string',
+              default: 'all',
+              description: 'Provider to search: all, claude, or codex',
+            },
+            project: {
+              type: 'string',
+              description: 'Only search sessions whose title/cwd/path matches',
+            },
+            status: {
+              type: 'string',
+              description: 'Chunk audit status: pending, audited, or failed',
+            },
+            limit: {
+              type: 'string',
+              default: '20',
+              description: 'Maximum chunks to return',
+            },
+            json: {
+              type: 'boolean',
+              default: false,
+              description: 'Print structured JSON',
+            },
+          },
+          run: ({ args }) => {
+            const provider = transcriptProviderArg(args.provider)
+            const query = stringArg(args.query)
+            const project = stringArg(args.project)
+            const status = transcriptStatusArg(args.status)
+            const result = searchTranscriptChunks({
+              ...(query ? { query } : {}),
+              ...(provider ? { provider } : {}),
+              ...(project ? { project } : {}),
+              ...(status ? { status } : {}),
+              limit: numberArg(args.limit, 20, { min: 1, max: 200 }),
+            })
+            if (jsonFlag(args)) {
+              printJson(result)
+              return
+            }
+            printTable(
+              ['Chunk', 'Provider', 'Session', 'Excerpt'],
+              chunkRows(result.hits),
+            )
+          },
+        }),
+        show: defineCommand({
+          meta: {
+            name: 'show',
+            description: 'Show one parsed transcript chunk as markdown',
+          },
+          args: {
+            chunk: {
+              type: 'string',
+              description: 'Transcript chunk id',
+            },
+            json: {
+              type: 'boolean',
+              default: false,
+              description: 'Print structured JSON',
+            },
+          },
+          run: ({ args }) => {
+            const id = stringArg(args.chunk)
+            if (!id) throw new Error('Pass --chunk <id>')
+            const chunk = getTranscriptChunkView(id)
+            if (!chunk) throw new Error(`Transcript chunk not found: ${id}`)
+            if (jsonFlag(args)) {
+              printJson({ chunk })
+              return
+            }
+            process.stdout.write(renderTranscriptChunkMarkdown(chunk))
+          },
+        }),
+        read: defineCommand({
+          meta: {
+            name: 'read',
+            description: 'Read chunk context from one transcript session',
+          },
+          args: {
+            session: {
+              type: 'string',
+              description: 'Transcript session id',
+            },
+            sequence: {
+              type: 'string',
+              description: 'Center sequence number to read around',
+            },
+            before: {
+              type: 'string',
+              default: '1',
+              description: 'Chunks before the sequence to include',
+            },
+            after: {
+              type: 'string',
+              default: '1',
+              description: 'Chunks after the sequence to include',
+            },
+            limit: {
+              type: 'string',
+              default: '20',
+              description: 'Maximum chunks when no sequence is provided',
+            },
+            json: {
+              type: 'boolean',
+              default: false,
+              description: 'Print structured JSON',
+            },
+          },
+          run: ({ args }) => {
+            const sessionId = stringArg(args.session)
+            if (!sessionId) throw new Error('Pass --session <id>')
+            const chunks = readTranscriptChunks({
+              sessionId,
+              ...(stringArg(args.sequence)
+                ? {
+                    sequence: numberArg(args.sequence, 0, {
+                      min: 0,
+                      max: 1_000_000,
+                    }),
+                  }
+                : {}),
+              before: numberArg(args.before, 1, { min: 0, max: 20 }),
+              after: numberArg(args.after, 1, { min: 0, max: 20 }),
+              limit: numberArg(args.limit, 20, { min: 1, max: 100 }),
+            })
+            if (jsonFlag(args)) {
+              printJson({ chunks })
+              return
+            }
+            process.stdout.write(renderTranscriptChunksMarkdown(chunks))
+          },
+        }),
         'reset-audit': defineCommand({
           meta: {
             name: 'reset-audit',
@@ -393,6 +541,20 @@ function providersArg(value: string): Array<'claude' | 'codex'> {
   return ['claude', 'codex']
 }
 
+function transcriptProviderArg(value: unknown): 'claude' | 'codex' | undefined {
+  const raw = stringArg(value)
+  if (raw === 'claude' || raw === 'codex') return raw
+  return undefined
+}
+
+function transcriptStatusArg(
+  value: unknown,
+): 'pending' | 'audited' | 'failed' | undefined {
+  const raw = stringArg(value)
+  if (raw === 'pending' || raw === 'audited' || raw === 'failed') return raw
+  return undefined
+}
+
 function commaListArg(value: unknown): string[] {
   const raw = stringArg(value)
   if (!raw) return []
@@ -417,4 +579,18 @@ function transcriptIndexRows(
     String(row.count),
     String(row.bytes),
   ])
+}
+
+function chunkRows(chunks: TranscriptChunkView[]): string[][] {
+  return chunks.map((chunk) => [
+    `${chunk.sessionId}#${chunk.sequence}`,
+    chunk.provider,
+    chunk.sessionTitle ?? chunk.sessionCwd ?? chunk.sessionId,
+    chunk.excerpt,
+  ])
+}
+
+function renderTranscriptChunksMarkdown(chunks: TranscriptChunkView[]): string {
+  if (chunks.length === 0) return ''
+  return chunks.map((chunk) => renderTranscriptChunkMarkdown(chunk)).join('\n')
 }
