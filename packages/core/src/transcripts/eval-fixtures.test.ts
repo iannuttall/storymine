@@ -20,6 +20,8 @@ test('prompting alpha fixtures include intervention examples', () => {
   assert.ok(
     strong.some((fixture) => fixture.interventionType === 'validation-demand'),
   )
+  assert.ok(strong.some((fixture) => fixture.skillPotential === 'ui'))
+  assert.ok(strong.some((fixture) => fixture.skillPotential === 'performance'))
 })
 
 test('prompting alpha fixtures are newsletter-safe examples', () => {
@@ -28,6 +30,7 @@ test('prompting alpha fixtures are newsletter-safe examples', () => {
     assert.ok(fixture.quickTip.length > 20)
     assert.ok(fixture.quickTip.length <= 140)
     assert.ok(fixture.why.length > 20)
+    assert.ok(fixture.plainEnglishWhy.length > 20)
     assert.ok(fixture.examplePrompt.length > 20)
     assert.doesNotMatch(fixture.quickTip, /this repo|this project/i)
     assert.doesNotMatch(fixture.examplePrompt, /\/Users\//)

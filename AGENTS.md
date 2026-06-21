@@ -37,6 +37,8 @@ Good transcript findings look like:
 - search/read moves such as making AI find exact prior examples before redoing research
 - steering moves where the human stopped, redirected, pushed back on, or reminded the AI of a rule it missed
 - intervention moments where the human caught AI drift, named the bad pattern, and forced a better next move
+- technical lessons explained in plain English for smart beginners, not only developers
+- repeated UI, performance, debugging, research, or workflow rules that could become future skills
 
 Weak findings:
 
@@ -234,6 +236,8 @@ Before calling candidate output "good", check:
 - Are duplicates collapsed?
 - Is the export varied across alpha types?
 - Are stop/steer/pushback/reminder moments labelled clearly enough to review later?
+- Can a non-technical but serious reader understand why the tip matters?
+- Could this become a reusable skill/checklist/rule for future agents?
 
 The next major quality improvement should come from reviewed examples: run more real project audits, have the human mark strong/weak findings, then add those examples back into the audit or curation prompt.
 

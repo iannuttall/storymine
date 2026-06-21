@@ -120,6 +120,8 @@ Weak findings are rejected or should be ignored during review:
 
 The best findings are usually intervention moments: the exact instruction, constraint, verification loop, anti-example, pushback, reminder, or correction pattern that changed the AI's behaviour. Prefer findings that can say what the AI was about to do wrong, how the human steered it, and what reusable prompt move follows from that.
 
+Good findings can be technical, but they should be explainable to smart beginners. For example, "prompt for idempotence" is better framed as "ask AI to make expensive work restartable so failed runs do not waste completed work." Repeated UI, performance, debugging, and workflow findings can later become reusable agent skills.
+
 ## Search And Semantic Retrieval Direction
 
 The extraction pipeline should eventually have two retrieval layers:

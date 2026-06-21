@@ -83,8 +83,14 @@ export function renderTranscriptFindingReviewsMarkdown(
               )}`,
             ]
           : []),
+        ...(asString(finding.metadata.skillPotential)
+          ? [`- Skill potential: ${asString(finding.metadata.skillPotential)}`]
+          : []),
         ...(asString(finding.metadata.examplePrompt)
           ? [`- Example prompt: ${asString(finding.metadata.examplePrompt)}`]
+          : []),
+        ...(asString(finding.metadata.plainEnglishWhy)
+          ? [`- Plain English: ${asString(finding.metadata.plainEnglishWhy)}`]
           : []),
         '',
         'Evidence:',

@@ -55,6 +55,8 @@ test('renderTranscriptFindingReviewsMarkdown is agent-readable', () => {
     assert.match(markdown, /Finding ID: finding_1/)
     assert.match(markdown, /Example prompt:/)
     assert.match(markdown, /Intervention type: validation-demand/)
+    assert.match(markdown, /Skill potential: workflow/)
+    assert.match(markdown, /Plain English:/)
     assert.match(markdown, /Evidence:/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
@@ -101,6 +103,9 @@ function seedFinding(db: ReturnType<typeof openResearchDb>, dir: string): void {
       metadata: {
         alphaType: 'verification-loop',
         interventionType: 'validation-demand',
+        plainEnglishWhy:
+          'It stops the AI making polished changes to something it has not inspected.',
+        skillPotential: 'workflow',
         examplePrompt:
           'Inspect the actual output first, then rewrite only what is visibly weak.',
       },

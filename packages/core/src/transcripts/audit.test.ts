@@ -25,6 +25,8 @@ test('parseAuditResponse validates model JSON findings', () => {
           quickTip:
             'Ask the AI to challenge its own plan before it writes code.',
           whyItWorks: 'The useful part is the correction loop.',
+          plainEnglishWhy:
+            'It makes the AI slow down and check weak assumptions before doing expensive work.',
           mistakeToAvoid:
             'Letting a broad plan become implementation too soon.',
           betterMove:
@@ -33,6 +35,7 @@ test('parseAuditResponse validates model JSON findings', () => {
             'Before coding, list the risky assumptions in your plan and what would prove them wrong.',
           alphaType: 'course-correction',
           interventionType: 'pushback',
+          skillPotential: 'workflow',
           alphaScore: 0.9,
           category: 'prompting',
           confidence: 0.8,
@@ -54,6 +57,11 @@ test('parseAuditResponse validates model JSON findings', () => {
   )
   assert.equal(findings[0]?.alphaScore, 0.9)
   assert.equal(findings[0]?.interventionType, 'pushback')
+  assert.equal(
+    findings[0]?.plainEnglishWhy,
+    'It makes the AI slow down and check weak assumptions before doing expensive work.',
+  )
+  assert.equal(findings[0]?.skillPotential, 'workflow')
 })
 
 test('auditPromptForChunk includes redaction contract', () => {
@@ -78,7 +86,10 @@ test('auditPromptForChunk includes redaction contract', () => {
   assert.match(prompt, /alphaScore/)
   assert.match(prompt, /human intervention moments/)
   assert.match(prompt, /interventionType/)
+  assert.match(prompt, /plainEnglishWhy/)
+  assert.match(prompt, /skillPotential/)
   assert.match(prompt, /pushed back/)
+  assert.match(prompt, /smart beginners/)
 })
 
 test('parseAuditResponse rejects low-alpha findings', () => {

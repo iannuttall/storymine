@@ -83,6 +83,8 @@ Prefer findings like:
 - Stop, redirect, or remind the AI immediately when it drifts from a standing rule.
 - Push back when AI returns project-specific notes instead of broad prompting lessons.
 - Label the intervention type: stop, steer, pushback, reminder, scope-reset, or validation-demand.
+- Explain technical alpha in plain English for smart beginners.
+- Mark repeated UI, performance, debugging, research, or workflow lessons as future skill material.
 
 Reject or down-rank:
 

@@ -60,6 +60,8 @@ interface ParsedFinding {
   alphaScore: number
   alphaType: string | null
   interventionType: string | null
+  plainEnglishWhy: string | null
+  skillPotential: string | null
 }
 
 export function createCommandAuditModel(
@@ -172,6 +174,7 @@ export function auditPromptForChunk(chunk: TranscriptChunk): string {
     'Your job is to find prompting alpha: high-agency, non-obvious tips that help a broad audience prompt ChatGPT, Claude, Codex, or other AI assistants better.',
     '',
     'The audience does not care about this repo, product, codebase, or implementation detail. They care about the reusable prompting move, review loop, constraint, or correction that improved the AI interaction.',
+    'Write for smart beginners as well as developers. Keep the technical insight, but explain it in normal language so a non-technical operator can understand why it matters.',
     '',
     'The hook is: lessons you only learn by building with AI every day. Prefer sharp prompting habits over generic productivity advice.',
     '',
@@ -196,6 +199,8 @@ export function auditPromptForChunk(chunk: TranscriptChunk): string {
     '- the human caught an agent failure mode: cargo-culting, overbuilding, hallucinated certainty, weak defaults, hidden privacy risk, generic copy, or shallow validation',
     '- the human gave examples, anti-examples, do-not-do lists, or acceptance criteria the AI could actually follow',
     '- the human turned a messy transcript/result into a reusable prompt, checklist, review loop, or correction pattern',
+    '- the human surfaced a reusable rule that could become a skill, checklist, or standing instruction for future agents',
+    '- the human improved AI-generated UI by removing choices, tightening scope, or forcing the AI to inspect the real screen',
     '',
     'Reject low-alpha material:',
     '- product-specific architecture choices',
@@ -205,9 +210,10 @@ export function auditPromptForChunk(chunk: TranscriptChunk): string {
     '- summaries of what happened without a reusable behaviour change',
     '- tips that require knowing private context, file names, or project details',
     '- obvious beginner advice unless the transcript shows a sharper prompt pattern behind it',
+    '- technical jargon that is useful but left unexplained',
     '',
     'Return JSON only with this shape:',
-    '{"findings":[{"quickTip":"...","whyItWorks":"...","mistakeToAvoid":"...","betterMove":"...","examplePrompt":"...","alphaType":"human-steering|course-correction|prompt-pattern|verification-loop|scope-control|agent-failure|privacy-safety|context-management","interventionType":"stop|steer|pushback|reminder|scope-reset|validation-demand|none","alphaScore":0.0,"category":"prompting|product|security|debugging|agent-behaviour|workflow","confidence":0.0,"evidence":["short paraphrased evidence"]}]}',
+    '{"findings":[{"quickTip":"...","whyItWorks":"...","plainEnglishWhy":"...","mistakeToAvoid":"...","betterMove":"...","examplePrompt":"...","alphaType":"human-steering|course-correction|prompt-pattern|verification-loop|scope-control|agent-failure|privacy-safety|context-management","interventionType":"stop|steer|pushback|reminder|scope-reset|validation-demand|none","skillPotential":"ui|frontend|performance|debugging|research|workflow|privacy|content|none","alphaScore":0.0,"category":"prompting|product|security|debugging|agent-behaviour|workflow","confidence":0.0,"evidence":["short paraphrased evidence"]}]}',
     '',
     'Rules:',
     '- Return at most 3 findings. Prefer 0 good findings over 5 weak ones.',
@@ -218,6 +224,9 @@ export function auditPromptForChunk(chunk: TranscriptChunk): string {
     '- interventionType should describe the human move. Use "none" only when the finding is valuable but not an intervention moment.',
     '- betterMove must be the concrete prompting move that improves the AI interaction.',
     '- examplePrompt should be a short prompt or instruction the human could actually paste into an AI chat.',
+    '- plainEnglishWhy should explain the value without assuming the reader knows developer jargon.',
+    '- If you use a technical term like idempotent, retries, fixtures, cache, or transport, explain what it means in plain English.',
+    '- skillPotential should mark whether this could later become a reusable AI skill/checklist; use "none" if not.',
     '- mistakeToAvoid should name the bad habit or trap.',
     '- Keep each field concise, punchy, and newsletter-friendly.',
     '- Translate concrete project details into general AI-prompting advice.',
@@ -246,6 +255,12 @@ export function auditPromptForChunk(chunk: TranscriptChunk): string {
     '',
     'Bad quickTip: "Use semantic search for logs."',
     'Good quickTip: "Before asking AI to audit a big chat archive, make it search for exact past examples and read only the relevant parts."',
+    '',
+    'Bad quickTip: "Prompt for idempotence."',
+    'Good quickTip: "For expensive AI work, ask it to make the process restartable so failed runs do not waste the work already done."',
+    '',
+    'Bad quickTip: "Fix UI choices."',
+    'Good quickTip: "When AI overcomplicates a UI, ask it what can be removed before asking it to polish the design."',
     '',
     `Provider: ${chunk.provider}`,
     `Session: ${chunk.sessionId}`,
@@ -296,6 +311,8 @@ export function parseAuditResponse(output: string): ParsedFinding[] {
         alphaScore: Math.max(0, Math.min(alphaScore, 1)),
         alphaType: asString(object.alphaType),
         interventionType: asString(object.interventionType),
+        plainEnglishWhy: asString(object.plainEnglishWhy),
+        skillPotential: asString(object.skillPotential),
         evidence: evidence.slice(0, 5),
       },
     ]
@@ -332,6 +349,8 @@ function findingToRecord(
       alphaScore: finding.alphaScore,
       alphaType: finding.alphaType,
       interventionType: finding.interventionType,
+      plainEnglishWhy: finding.plainEnglishWhy,
+      skillPotential: finding.skillPotential,
     },
   }
 }
