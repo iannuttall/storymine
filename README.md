@@ -106,6 +106,7 @@ Examples of good findings:
 - Make AI inspect the actual screen, file, or data before rewriting generic output.
 - Give AI both the desired tone and the anti-tone to avoid.
 - Make AI search and read exact prior examples before redoing research.
+- Stop the AI as soon as it drifts and restate the rule it missed.
 
 Weak findings are rejected or should be ignored during review:
 
@@ -115,7 +116,7 @@ Weak findings are rejected or should be ignored during review:
 - Summaries of a chat without a reusable behaviour change.
 - Anything that requires private context to understand.
 
-The best findings are usually about prompting: the exact instruction, constraint, verification loop, anti-example, or correction pattern that changed the AI's behaviour.
+The best findings are usually about prompting: the exact instruction, constraint, verification loop, anti-example, pushback, reminder, or correction pattern that changed the AI's behaviour.
 
 ## Search And Semantic Retrieval Direction
 

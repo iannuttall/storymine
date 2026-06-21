@@ -80,6 +80,7 @@ Prefer findings like:
 - Make AI inspect real files, screens, docs, or outputs before rewriting.
 - Give AI both the desired tone and the anti-tone to avoid.
 - Make AI search and read exact prior examples before redoing research.
+- Stop, redirect, or remind the AI immediately when it drifts from a standing rule.
 
 Reject or down-rank:
 

@@ -35,6 +35,7 @@ Good transcript findings look like:
 - privacy/safety moves such as explicit do-not-mention lists or secret redaction habits
 - context-management moves such as telling AI which examples are illustrative, not complete specs
 - search/read moves such as making AI find exact prior examples before redoing research
+- steering moves where the human stopped, redirected, pushed back on, or reminded the AI of a rule it missed
 
 Weak findings:
 
