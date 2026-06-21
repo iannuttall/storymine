@@ -1,9 +1,19 @@
 import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
+import {
+  openResearchDb,
+  upsertTranscriptChunks,
+  upsertTranscriptFiles,
+  upsertTranscriptSession,
+} from '../storage/database.js'
 import {
   auditPromptForChunk,
   createCommandAuditModel,
   parseAuditResponse,
+  selectTranscriptChunksForAudit,
   type TranscriptAuditModel,
 } from './audit.js'
 
@@ -127,3 +137,112 @@ test('createCommandAuditModel times out slow commands', async () => {
 
   await assert.rejects(() => model.complete('prompt'), /timed out/)
 })
+
+test('selectTranscriptChunksForAudit filters and dedupes chunks', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'research-audit-select-'))
+  try {
+    const db = openResearchDb(join(dir, 'test.db'))
+    seedAuditSelectionTranscript(db, dir)
+
+    const selected = selectTranscriptChunksForAudit(
+      {
+        query: 'inspect screen',
+        project: 'tidechecker',
+        limit: 10,
+      },
+      db,
+    )
+
+    assert.deepEqual(
+      selected.map((chunk) => chunk.id),
+      ['chunk_1'],
+    )
+
+    const withDuplicates = selectTranscriptChunksForAudit(
+      {
+        query: 'inspect screen',
+        project: 'tidechecker',
+        limit: 10,
+        includeDuplicates: true,
+      },
+      db,
+    )
+
+    assert.deepEqual(
+      withDuplicates.map((chunk) => chunk.id),
+      ['chunk_1', 'chunk_2'],
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+function seedAuditSelectionTranscript(
+  db: ReturnType<typeof openResearchDb>,
+  dir: string,
+): void {
+  upsertTranscriptFiles(db, [
+    {
+      id: 'file_1',
+      provider: 'codex',
+      path: join(dir, 'session.jsonl'),
+      sizeBytes: 12,
+      modifiedAtMs: 1234,
+      hash: 'hash_1',
+      indexedAt: '2026-06-20T10:00:00.000Z',
+      status: 'indexed',
+      error: null,
+    },
+  ])
+  upsertTranscriptSession(db, {
+    id: 'session_1',
+    provider: 'codex',
+    fileId: 'file_1',
+    title: 'Tidechecker web',
+    cwd: '/Users/iannuttall/dev/apps/tidechecker-web',
+    startedAt: '2026-06-20T10:00:00.000Z',
+    updatedAt: '2026-06-20T11:00:00.000Z',
+    messageCount: 3,
+    metadata: {},
+  })
+  upsertTranscriptChunks(db, [
+    {
+      id: 'chunk_1',
+      sessionId: 'session_1',
+      provider: 'codex',
+      sequence: 0,
+      tokenEstimate: 20,
+      textHash: 'same_hash',
+      redactedText:
+        '[user] Inspect screen output before rewriting generic copy.',
+      redactionCount: 0,
+      auditStatus: 'pending',
+      metadata: {},
+    },
+    {
+      id: 'chunk_2',
+      sessionId: 'session_1',
+      provider: 'codex',
+      sequence: 1,
+      tokenEstimate: 20,
+      textHash: 'same_hash',
+      redactedText:
+        '[user] Inspect screen output before rewriting generic copy.',
+      redactionCount: 0,
+      auditStatus: 'pending',
+      metadata: {},
+    },
+    {
+      id: 'chunk_3',
+      sessionId: 'session_1',
+      provider: 'codex',
+      sequence: 2,
+      tokenEstimate: 20,
+      textHash: 'other_hash',
+      redactedText: '[user] Build unrelated output.',
+      redactionCount: 0,
+      auditStatus: 'pending',
+      metadata: {},
+    },
+  ])
+}

@@ -1,17 +1,19 @@
 import { spawn } from 'node:child_process'
+import type Database from 'better-sqlite3'
 import {
   type TranscriptChunk,
   type TranscriptFinding,
+  type TranscriptProvider,
   transcriptFindingCategorySchema,
 } from '../schemas.js'
 import {
   getDb,
   insertTranscriptFindings,
-  listTranscriptChunks,
   markTranscriptChunkAuditStatus,
   nowIso,
   stableId,
 } from '../storage/database.js'
+import { searchTranscriptChunks } from './search.js'
 
 export interface TranscriptAuditModel {
   complete(prompt: string): Promise<string>
@@ -20,6 +22,12 @@ export interface TranscriptAuditModel {
 export interface AuditTranscriptOptions {
   limit?: number
   model: TranscriptAuditModel
+  query?: string
+  provider?: TranscriptProvider
+  project?: string
+  status?: 'pending' | 'audited' | 'failed'
+  includeDuplicates?: boolean
+  database?: Database.Database
   onProgress?: (event: TranscriptAuditProgressEvent) => void
 }
 
@@ -65,9 +73,21 @@ export function createCommandAuditModel(
 export async function auditPendingTranscriptChunks(
   options: AuditTranscriptOptions,
 ): Promise<AuditTranscriptResult> {
-  const database = getDb()
+  const database = options.database ?? getDb()
   const limit = Math.max(1, Math.min(options.limit ?? 10, 100))
-  const chunks = listTranscriptChunks(database, { status: 'pending', limit })
+  const chunks = selectTranscriptChunksForAudit(
+    {
+      limit,
+      ...(options.query ? { query: options.query } : {}),
+      ...(options.provider ? { provider: options.provider } : {}),
+      ...(options.project ? { project: options.project } : {}),
+      status: options.status ?? 'pending',
+      ...(options.includeDuplicates !== undefined
+        ? { includeDuplicates: options.includeDuplicates }
+        : {}),
+    },
+    database,
+  )
   let findingsCount = 0
   let failedCount = 0
 
@@ -106,6 +126,42 @@ export async function auditPendingTranscriptChunks(
     chunksFailed: failedCount,
     findings: findingsCount,
   }
+}
+
+export function selectTranscriptChunksForAudit(
+  options: {
+    limit?: number
+    query?: string
+    provider?: TranscriptProvider
+    project?: string
+    status?: 'pending' | 'audited' | 'failed'
+    includeDuplicates?: boolean
+  } = {},
+  database: Database.Database = getDb(),
+): TranscriptChunk[] {
+  const limit = Math.max(1, Math.min(options.limit ?? 10, 100))
+  const searchLimit = options.includeDuplicates ? limit : limit * 3
+  const result = searchTranscriptChunks(
+    {
+      ...(options.query ? { query: options.query } : {}),
+      ...(options.provider ? { provider: options.provider } : {}),
+      ...(options.project ? { project: options.project } : {}),
+      status: options.status ?? 'pending',
+      limit: searchLimit,
+    },
+    database,
+  )
+  if (options.includeDuplicates) return result.hits.slice(0, limit)
+
+  const seenHashes = new Set<string>()
+  const selected: TranscriptChunk[] = []
+  for (const chunk of result.hits) {
+    if (seenHashes.has(chunk.textHash)) continue
+    seenHashes.add(chunk.textHash)
+    selected.push(chunk)
+    if (selected.length >= limit) break
+  }
+  return selected
 }
 
 export function auditPromptForChunk(chunk: TranscriptChunk): string {

@@ -53,3 +53,19 @@ test('research me transcripts export-corpus --help prints export help', () => {
   assert.match(result.stdout, /semantic-ready markdown/)
   assert.match(result.stdout, /--output/)
 })
+
+test('research me transcripts audit --help prints selection filters', () => {
+  const distDir = dirname(fileURLToPath(import.meta.url))
+  const result = spawnSync(
+    process.execPath,
+    [join(distDir, 'index.js'), 'me', 'transcripts', 'audit', '--help'],
+    {
+      encoding: 'utf8',
+    },
+  )
+
+  assert.equal(result.status, 0)
+  assert.match(result.stdout, /--query/)
+  assert.match(result.stdout, /--project/)
+  assert.match(result.stdout, /--includeDuplicates/)
+})

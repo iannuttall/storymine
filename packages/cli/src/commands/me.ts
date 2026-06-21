@@ -281,6 +281,29 @@ export const meCommand = defineCommand({
               default: '10',
               description: 'Maximum pending chunks to audit',
             },
+            query: {
+              type: 'string',
+              description: 'Only audit chunks matching a search query',
+            },
+            provider: {
+              type: 'string',
+              default: 'all',
+              description: 'Provider to audit: all, claude, or codex',
+            },
+            project: {
+              type: 'string',
+              description: 'Only audit sessions whose title/cwd/path matches',
+            },
+            status: {
+              type: 'string',
+              default: 'pending',
+              description: 'Chunk audit status: pending, audited, or failed',
+            },
+            includeDuplicates: {
+              type: 'boolean',
+              default: false,
+              description: 'Audit duplicate chunks with the same text hash',
+            },
             timeoutSeconds: {
               type: 'string',
               default: '120',
@@ -300,8 +323,17 @@ export const meCommand = defineCommand({
           run: async ({ args }) => {
             const command = stringArg(args.command) ?? DEFAULT_AUDIT_COMMAND
             const shouldProgress = Boolean(args.progress) || !jsonFlag(args)
+            const provider = transcriptProviderArg(args.provider)
+            const query = stringArg(args.query)
+            const project = stringArg(args.project)
+            const status = transcriptStatusArg(args.status)
             const result = await auditPendingTranscriptChunks({
               limit: numberArg(args.limit, 10, { min: 1, max: 100 }),
+              ...(query ? { query } : {}),
+              ...(provider ? { provider } : {}),
+              ...(project ? { project } : {}),
+              ...(status ? { status } : {}),
+              includeDuplicates: Boolean(args.includeDuplicates),
               model: createCommandAuditModel(command, {
                 timeoutMs:
                   numberArg(args.timeoutSeconds, 120, {
