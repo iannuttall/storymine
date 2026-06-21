@@ -124,6 +124,8 @@ Good findings can be technical, but they should be explainable to smart beginner
 
 Do not flatten strong findings into vague slogans. Reject headings like "Give agents a finish line." Use direct instructions such as "Ask AI to implement one task, run checks, commit, and continue." The title should carry the actual prompt move.
 
+Avoid developer shorthand in titles. "Infra config" should become "settings." "API" should become "outside service" unless the reader truly needs the technical term. The finding can keep technical detail in the example prompt or explanation.
+
 ## Search And Semantic Retrieval Direction
 
 The extraction pipeline should eventually have two retrieval layers:

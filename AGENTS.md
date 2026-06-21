@@ -40,6 +40,7 @@ Good transcript findings look like:
 - technical lessons explained in plain English for smart beginners, not only developers
 - repeated UI, performance, debugging, research, or workflow rules that could become future skills
 - direct titles that name the exact prompt move, not slogans or vague contrast lines
+- plain title words such as settings, outside service, old version, current system, saved results, and restartable work instead of developer shorthand
 
 Weak findings:
 
@@ -240,6 +241,7 @@ Before calling candidate output "good", check:
 - Can a non-technical but serious reader understand why the tip matters?
 - Could this become a reusable skill/checklist/rule for future agents?
 - Does the title say the actual instruction, or is it just a friendly phrase?
+- Does the title avoid unclear shorthand like infra, config, API, caveat, and feature parity?
 
 The next major quality improvement should come from reviewed examples: run more real project audits, have the human mark strong/weak findings, then add those examples back into the audit or curation prompt.
 

@@ -40,7 +40,10 @@ test('prompting alpha fixtures are newsletter-safe examples', () => {
     assert.doesNotMatch(fixture.quickTip, /not just/i)
     assert.doesNotMatch(fixture.quickTip, /[—–]/)
     assert.doesNotMatch(fixture.quickTip, /^[^.!?]{1,80}: /)
-    assert.doesNotMatch(fixture.quickTip, /\bgreenfield|caveat|wishlist/i)
+    assert.doesNotMatch(
+      fixture.quickTip,
+      /\bgreenfield|caveat|wishlist|infra|config|api|idempotent|spec|implementation|feature parity/i,
+    )
     assert.doesNotMatch(fixture.examplePrompt, /\/Users\//)
   }
 })

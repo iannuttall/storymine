@@ -134,6 +134,15 @@ test('parseAuditResponse rejects AI-smell quick tips', () => {
           'Ask AI to produce a greenfield plan before it writes code.',
         ),
         modelFinding('Give agents a finish line, not just a task list.'),
+        modelFinding(
+          'After an agent changes infra config, ask whether the fix is local, committed, and complete.',
+        ),
+        modelFinding(
+          'Ask AI to batch API calls and make the process idempotent.',
+        ),
+        modelFinding(
+          'Use a verified first implementation as the spec for the second one.',
+        ),
       ],
     }),
   )

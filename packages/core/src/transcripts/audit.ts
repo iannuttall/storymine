@@ -225,7 +225,7 @@ export function auditPromptForChunk(chunk: TranscriptChunk): string {
     '- Do not write quickTip as "Before...", "After...", or "When..." followed by a comma. That usually creates an AI-smell headline instead of an instruction.',
     '- Avoid cute contrasts like "not just...", "not a...", "rather than...", "instead of...", "finish line", "north star", "guardrails", "playbook", or other idioms if they hide the concrete instruction.',
     '- Do not use em dashes, en dashes, or colon-as-pause phrasing in quickTip.',
-    '- Avoid jargon like "greenfield", "caveat", "fixtures", "transport", or "idempotent" in quickTip unless you explain it in plain English.',
+    '- Avoid jargon like "greenfield", "caveat", "fixtures", "transport", "infra", "config", "API", "spec", "implementation", "feature parity", or "idempotent" in quickTip. Use plain words like old version, current system, settings, outside service, saved results, first version, proven approach, or restartable work.',
     '- For stop, steer, pushback, reminder, scope-reset, or validation-demand moments, set alphaType to "human-steering" unless a narrower alphaType is clearly stronger.',
     '- interventionType should describe the human move. Use "none" only when the finding is valuable but not an intervention moment.',
     '- betterMove must be the concrete prompting move that improves the AI interaction.',
@@ -270,6 +270,9 @@ export function auditPromptForChunk(chunk: TranscriptChunk): string {
     '',
     'Bad quickTip: "Give agents a finish line, not just a task list."',
     'Good quickTip: "Ask AI to work through one task at a time, run checks, commit, and continue."',
+    '',
+    'Bad quickTip: "After an agent changes infra config, ask whether the fix is local, committed, and complete."',
+    'Good quickTip: "Ask AI to explain whether a settings fix was only local, saved in git, and fully applied."',
     '',
     `Provider: ${chunk.provider}`,
     `Session: ${chunk.sessionId}`,
@@ -459,7 +462,11 @@ function hasWeakQuickTip(value: string): boolean {
   ) {
     return true
   }
-  if (/\b(greenfield|caveat|leverage|seamless|robust)\b/i.test(text)) {
+  if (
+    /\b(greenfield|caveat|leverage|seamless|robust|infra|config|api|fixture|fixtures|transport|idempotent|spec|implementation|feature parity)\b/i.test(
+      text,
+    )
+  ) {
     return true
   }
   if (/^(before|after|when)\b.+,/i.test(text)) return true
