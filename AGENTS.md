@@ -36,6 +36,7 @@ Good transcript findings look like:
 - context-management moves such as telling AI which examples are illustrative, not complete specs
 - search/read moves such as making AI find exact prior examples before redoing research
 - steering moves where the human stopped, redirected, pushed back on, or reminded the AI of a rule it missed
+- intervention moments where the human caught AI drift, named the bad pattern, and forced a better next move
 
 Weak findings:
 
@@ -232,5 +233,11 @@ Before calling candidate output "good", check:
 - Is evidence paraphrased and non-private?
 - Are duplicates collapsed?
 - Is the export varied across alpha types?
+- Are stop/steer/pushback/reminder moments labelled clearly enough to review later?
 
 The next major quality improvement should come from reviewed examples: run more real project audits, have the human mark strong/weak findings, then add those examples back into the audit or curation prompt.
+
+Reviewed prompt-alpha fixtures live in `packages/core/src/transcripts/eval-fixtures.ts`.
+Use them when tuning extraction prompts. They intentionally focus on human
+intervention moments: stop, steer, pushback, reminder, scope-reset, and
+validation-demand.

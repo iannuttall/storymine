@@ -81,6 +81,8 @@ Prefer findings like:
 - Give AI both the desired tone and the anti-tone to avoid.
 - Make AI search and read exact prior examples before redoing research.
 - Stop, redirect, or remind the AI immediately when it drifts from a standing rule.
+- Push back when AI returns project-specific notes instead of broad prompting lessons.
+- Label the intervention type: stop, steer, pushback, reminder, scope-reset, or validation-demand.
 
 Reject or down-rank:
 

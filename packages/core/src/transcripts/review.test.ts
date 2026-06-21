@@ -54,6 +54,7 @@ test('renderTranscriptFindingReviewsMarkdown is agent-readable', () => {
 
     assert.match(markdown, /Finding ID: finding_1/)
     assert.match(markdown, /Example prompt:/)
+    assert.match(markdown, /Intervention type: validation-demand/)
     assert.match(markdown, /Evidence:/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
@@ -99,6 +100,7 @@ function seedFinding(db: ReturnType<typeof openResearchDb>, dir: string): void {
       capturedAt: '2026-06-20T10:00:00.000Z',
       metadata: {
         alphaType: 'verification-loop',
+        interventionType: 'validation-demand',
         examplePrompt:
           'Inspect the actual output first, then rewrite only what is visibly weak.',
       },

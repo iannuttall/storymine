@@ -107,6 +107,8 @@ Examples of good findings:
 - Give AI both the desired tone and the anti-tone to avoid.
 - Make AI search and read exact prior examples before redoing research.
 - Stop the AI as soon as it drifts and restate the rule it missed.
+- Push back when AI gives project-specific output after you asked for broad lessons.
+- Remind AI of standing rules before letting it continue with code or analysis.
 
 Weak findings are rejected or should be ignored during review:
 
@@ -116,7 +118,7 @@ Weak findings are rejected or should be ignored during review:
 - Summaries of a chat without a reusable behaviour change.
 - Anything that requires private context to understand.
 
-The best findings are usually about prompting: the exact instruction, constraint, verification loop, anti-example, pushback, reminder, or correction pattern that changed the AI's behaviour.
+The best findings are usually intervention moments: the exact instruction, constraint, verification loop, anti-example, pushback, reminder, or correction pattern that changed the AI's behaviour. Prefer findings that can say what the AI was about to do wrong, how the human steered it, and what reusable prompt move follows from that.
 
 ## Search And Semantic Retrieval Direction
 
@@ -134,6 +136,8 @@ research me transcripts export-corpus --output /tmp/research-transcript-corpus -
 That writes one markdown file per cleaned chunk with JSON provenance. A semantic engine can index those files, then feed exact chunk ids/session ids back into `search`, `show`, `read`, or targeted `audit`.
 
 Do not replace exact transcript provenance with summaries. Semantic search should help find candidates; final findings still need evidence-backed source parts.
+
+Reviewed examples for prompt tuning live in `packages/core/src/transcripts/eval-fixtures.ts`. They are privacy-safe summaries, not raw transcript excerpts, and should be used to keep future extraction focused on real intervention moments rather than project-specific notes.
 
 ## Findings Review
 

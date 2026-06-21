@@ -76,6 +76,13 @@ export function renderTranscriptFindingReviewsMarkdown(
         ...(asString(finding.metadata.alphaType)
           ? [`- Alpha type: ${asString(finding.metadata.alphaType)}`]
           : []),
+        ...(asString(finding.metadata.interventionType)
+          ? [
+              `- Intervention type: ${asString(
+                finding.metadata.interventionType,
+              )}`,
+            ]
+          : []),
         ...(asString(finding.metadata.examplePrompt)
           ? [`- Example prompt: ${asString(finding.metadata.examplePrompt)}`]
           : []),

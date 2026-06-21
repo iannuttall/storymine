@@ -32,6 +32,7 @@ test('parseAuditResponse validates model JSON findings', () => {
           examplePrompt:
             'Before coding, list the risky assumptions in your plan and what would prove them wrong.',
           alphaType: 'course-correction',
+          interventionType: 'pushback',
           alphaScore: 0.9,
           category: 'prompting',
           confidence: 0.8,
@@ -52,6 +53,7 @@ test('parseAuditResponse validates model JSON findings', () => {
     'Before coding, list the risky assumptions in your plan and what would prove them wrong.',
   )
   assert.equal(findings[0]?.alphaScore, 0.9)
+  assert.equal(findings[0]?.interventionType, 'pushback')
 })
 
 test('auditPromptForChunk includes redaction contract', () => {
@@ -74,6 +76,9 @@ test('auditPromptForChunk includes redaction contract', () => {
   assert.match(prompt, /examplePrompt/)
   assert.match(prompt, /prompting alpha/)
   assert.match(prompt, /alphaScore/)
+  assert.match(prompt, /human intervention moments/)
+  assert.match(prompt, /interventionType/)
+  assert.match(prompt, /pushed back/)
 })
 
 test('parseAuditResponse rejects low-alpha findings', () => {

@@ -59,6 +59,7 @@ interface ParsedFinding {
   examplePrompt: string | null
   alphaScore: number
   alphaType: string | null
+  interventionType: string | null
 }
 
 export function createCommandAuditModel(
@@ -174,7 +175,17 @@ export function auditPromptForChunk(chunk: TranscriptChunk): string {
     '',
     'The hook is: lessons you only learn by building with AI every day. Prefer sharp prompting habits over generic productivity advice.',
     '',
-    'Look for high-alpha moments like:',
+    'Primary extraction target: human intervention moments.',
+    'These are the strongest findings. Look for places where the human stopped, steered, pushed back on, or reminded the AI after the AI drifted, overreached, ignored context, made a weak assumption, or started solving the wrong problem.',
+    '',
+    'For each strong intervention finding, identify:',
+    '- what the AI was about to do wrong',
+    '- the exact kind of human intervention: stop, steer, pushback, reminder, scope-reset, or validation-demand',
+    '- the reusable prompting move another person could copy',
+    '',
+    'Useful transcript signals include phrases like "no", "not quite", "you missed", "remember", "we already decided", "stop", "actually", "do not", "that is too specific", "think of this as", "we need to look at", or the human restating a rule the AI should have followed.',
+    '',
+    'Also look for high-alpha moments like:',
     '- the human used exact words or constraints that made the AI produce better work',
     '- the human stopped the AI from blindly implementing the wrong thing',
     '- the human interrupted, corrected, or redirected the AI after it started drifting',
@@ -196,13 +207,15 @@ export function auditPromptForChunk(chunk: TranscriptChunk): string {
     '- obvious beginner advice unless the transcript shows a sharper prompt pattern behind it',
     '',
     'Return JSON only with this shape:',
-    '{"findings":[{"quickTip":"...","whyItWorks":"...","mistakeToAvoid":"...","betterMove":"...","examplePrompt":"...","alphaType":"course-correction|prompt-pattern|verification-loop|scope-control|agent-failure|privacy-safety|context-management","alphaScore":0.0,"category":"prompting|product|security|debugging|agent-behaviour|workflow","confidence":0.0,"evidence":["short paraphrased evidence"]}]}',
+    '{"findings":[{"quickTip":"...","whyItWorks":"...","mistakeToAvoid":"...","betterMove":"...","examplePrompt":"...","alphaType":"human-steering|course-correction|prompt-pattern|verification-loop|scope-control|agent-failure|privacy-safety|context-management","interventionType":"stop|steer|pushback|reminder|scope-reset|validation-demand|none","alphaScore":0.0,"category":"prompting|product|security|debugging|agent-behaviour|workflow","confidence":0.0,"evidence":["short paraphrased evidence"]}]}',
     '',
     'Rules:',
     '- Return at most 3 findings. Prefer 0 good findings over 5 weak ones.',
     '- alphaScore is audience value from 0 to 1. Only include findings with alphaScore >= 0.7.',
     '- quickTip must be useful to someone using AI tomorrow, even if they are not building this product.',
     '- Write quickTip as a general tip, not as "in this project..." or "for this repo...".',
+    '- For stop, steer, pushback, reminder, scope-reset, or validation-demand moments, set alphaType to "human-steering" unless a narrower alphaType is clearly stronger.',
+    '- interventionType should describe the human move. Use "none" only when the finding is valuable but not an intervention moment.',
     '- betterMove must be the concrete prompting move that improves the AI interaction.',
     '- examplePrompt should be a short prompt or instruction the human could actually paste into an AI chat.',
     '- mistakeToAvoid should name the bad habit or trap.',
@@ -224,6 +237,12 @@ export function auditPromptForChunk(chunk: TranscriptChunk): string {
     '',
     'Bad quickTip: "The agent made a mistake."',
     'Good quickTip: "When an AI drifts from your standard, stop it immediately and restate the rule in reusable terms."',
+    '',
+    'Bad quickTip: "Clarify the project goal."',
+    'Good quickTip: "When an AI gives project-specific findings after you asked for broad lessons, push back by naming the audience and the level of abstraction again."',
+    '',
+    'Bad quickTip: "Remind the agent about requirements."',
+    'Good quickTip: "When an AI forgets a standing rule, quote the missed rule back and ask it to update the plan before touching code."',
     '',
     'Bad quickTip: "Use semantic search for logs."',
     'Good quickTip: "Before asking AI to audit a big chat archive, make it search for exact past examples and read only the relevant parts."',
@@ -276,6 +295,7 @@ export function parseAuditResponse(output: string): ParsedFinding[] {
         examplePrompt: asString(object.examplePrompt),
         alphaScore: Math.max(0, Math.min(alphaScore, 1)),
         alphaType: asString(object.alphaType),
+        interventionType: asString(object.interventionType),
         evidence: evidence.slice(0, 5),
       },
     ]
@@ -311,6 +331,7 @@ function findingToRecord(
       examplePrompt: finding.examplePrompt,
       alphaScore: finding.alphaScore,
       alphaType: finding.alphaType,
+      interventionType: finding.interventionType,
     },
   }
 }
