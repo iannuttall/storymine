@@ -38,3 +38,18 @@ test('research me transcripts search --help prints search help', () => {
   assert.match(result.stdout, /Search parsed transcript chunks/)
   assert.match(result.stdout, /--query/)
 })
+
+test('research me transcripts export-corpus --help prints export help', () => {
+  const distDir = dirname(fileURLToPath(import.meta.url))
+  const result = spawnSync(
+    process.execPath,
+    [join(distDir, 'index.js'), 'me', 'transcripts', 'export-corpus', '--help'],
+    {
+      encoding: 'utf8',
+    },
+  )
+
+  assert.equal(result.status, 0)
+  assert.match(result.stdout, /semantic-ready markdown/)
+  assert.match(result.stdout, /--output/)
+})

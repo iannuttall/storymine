@@ -11,6 +11,7 @@ import {
   resetTranscriptAuditData,
   searchTranscriptChunks,
   type TranscriptChunkView,
+  writeTranscriptSearchCorpus,
 } from '@research/core'
 import { defineCommand } from 'citty'
 import { jsonFlag, numberArg, stringArg } from '../args.js'
@@ -487,6 +488,70 @@ export const meCommand = defineCommand({
               return
             }
             process.stdout.write(renderTranscriptChunksMarkdown(chunks))
+          },
+        }),
+        'export-corpus': defineCommand({
+          meta: {
+            name: 'export-corpus',
+            description:
+              'Write semantic-ready markdown files for parsed transcript chunks',
+          },
+          args: {
+            output: {
+              type: 'string',
+              description: 'Output directory for markdown corpus files',
+            },
+            query: {
+              type: 'string',
+              description: 'Optional search query to filter exported chunks',
+            },
+            provider: {
+              type: 'string',
+              default: 'all',
+              description: 'Provider to export: all, claude, or codex',
+            },
+            project: {
+              type: 'string',
+              description: 'Only export sessions whose title/cwd/path matches',
+            },
+            status: {
+              type: 'string',
+              description: 'Chunk audit status: pending, audited, or failed',
+            },
+            limit: {
+              type: 'string',
+              default: '100',
+              description: 'Maximum chunks to export',
+            },
+            json: {
+              type: 'boolean',
+              default: false,
+              description: 'Print structured JSON',
+            },
+          },
+          run: ({ args }) => {
+            const outputDir = stringArg(args.output)
+            if (!outputDir) throw new Error('Pass --output <dir>')
+            const provider = transcriptProviderArg(args.provider)
+            const query = stringArg(args.query)
+            const project = stringArg(args.project)
+            const status = transcriptStatusArg(args.status)
+            const result = writeTranscriptSearchCorpus({
+              outputDir,
+              ...(query ? { query } : {}),
+              ...(provider ? { provider } : {}),
+              ...(project ? { project } : {}),
+              ...(status ? { status } : {}),
+              limit: numberArg(args.limit, 100, { min: 1, max: 10_000 }),
+            })
+            if (jsonFlag(args)) {
+              printJson(result)
+              return
+            }
+            printTable(
+              ['Output', 'Documents'],
+              [[result.outputDir, String(result.documents.length)]],
+            )
           },
         }),
         'reset-audit': defineCommand({
