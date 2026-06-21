@@ -690,6 +690,56 @@ export function listTranscriptFindings(
   )
 }
 
+export function getTranscriptFinding(
+  database: Database.Database,
+  id: string,
+): TranscriptFinding | null {
+  const row = database
+    .prepare(
+      `SELECT
+        id,
+        session_id AS sessionId,
+        chunk_id AS chunkId,
+        lesson,
+        why_non_obvious AS whyNonObvious,
+        category,
+        confidence,
+        evidence_json AS evidenceJson,
+        candidate_id AS candidateId,
+        captured_at AS capturedAt,
+        metadata_json AS metadataJson
+      FROM transcript_findings
+      WHERE id = @id`,
+    )
+    .get({ id }) as
+    | (Omit<TranscriptFinding, 'evidence' | 'metadata'> & {
+        evidenceJson: string
+        metadataJson: string
+      })
+    | undefined
+  if (!row) return null
+  return transcriptFindingSchema.parse({
+    ...row,
+    evidence: JSON.parse(row.evidenceJson) as unknown,
+    metadata: parseJsonRecord(row.metadataJson),
+  })
+}
+
+export function updateTranscriptFindingMetadata(
+  database: Database.Database,
+  id: string,
+  metadata: Record<string, unknown>,
+): boolean {
+  const result = database
+    .prepare(
+      `UPDATE transcript_findings
+       SET metadata_json = @metadataJson
+       WHERE id = @id`,
+    )
+    .run({ id, metadataJson: JSON.stringify(metadata) })
+  return result.changes > 0
+}
+
 export function attachCandidateToFinding(
   database: Database.Database,
   findingId: string,

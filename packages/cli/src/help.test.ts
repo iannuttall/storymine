@@ -69,3 +69,18 @@ test('research me transcripts audit --help prints selection filters', () => {
   assert.match(result.stdout, /--project/)
   assert.match(result.stdout, /--includeDuplicates/)
 })
+
+test('research findings review --help prints review help', () => {
+  const distDir = dirname(fileURLToPath(import.meta.url))
+  const result = spawnSync(
+    process.execPath,
+    [join(distDir, 'index.js'), 'findings', 'review', '--help'],
+    {
+      encoding: 'utf8',
+    },
+  )
+
+  assert.equal(result.status, 0)
+  assert.match(result.stdout, /List transcript findings/)
+  assert.match(result.stdout, /--markdown/)
+})

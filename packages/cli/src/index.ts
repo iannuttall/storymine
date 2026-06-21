@@ -1,6 +1,7 @@
 import { researchCoreVersion } from '@research/core'
 import { defineCommand, runMain } from 'citty'
 import { candidatesCommand } from './commands/candidates.js'
+import { findingsCommand } from './commands/findings.js'
 import { mcpCommand } from './commands/mcp.js'
 import { meCommand } from './commands/me.js'
 import {
@@ -18,6 +19,7 @@ const main = defineCommand({
   subCommands: {
     candidates: candidatesCommand,
     doctor: doctorCommand,
+    findings: findingsCommand,
     mcp: mcpCommand,
     me: meCommand,
     privacy: privacyCommand,
