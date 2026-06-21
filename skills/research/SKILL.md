@@ -1,11 +1,13 @@
 ---
 name: research
-description: Use the local research CLI and MCP server to collect personal research signals, audit Claude/Codex transcripts for reusable AI-usage lessons, promote findings into newsletter candidates, or export candidate markdown/JSON for drafting agents. Trigger when the user asks to run research backfills, inspect app usage or Chrome history signals, audit AI chat transcripts, dedupe/promote findings, or use the research candidate feed.
+description: Use the local research CLI and MCP server to collect personal research signals, audit Claude/Codex transcripts for reusable prompting lessons, promote findings into newsletter candidates, or export candidate markdown/JSON for drafting agents. Trigger when the user asks to run research backfills, inspect app usage or Chrome history signals, audit AI chat transcripts, extract high-agency AI prompting tips, dedupe/promote findings, or use the research candidate feed.
 ---
 
 # research
 
 Use `research` to turn local personal signals and AI transcript audits into candidate ideas.
+
+The target output is not project summaries. It is hard-won prompting alpha: non-obvious ways to steer AI while building real products every day.
 
 The product is local-first. Treat app usage, browser history, transcript files, cache DBs, and raw audit chunks as private.
 
@@ -32,9 +34,15 @@ Run a targeted transcript audit:
 ```bash
 research me transcripts index --provider claude --project <project> --limit 10
 research me transcripts parse --provider claude --limit 10 --maxTokens 2500
-research me transcripts audit --command "claude -p" --limit 5 --timeoutSeconds 180
+research me transcripts audit --limit 5 --timeoutSeconds 180
 research candidates promote --minConfidence 0.7 --limit 25
 research candidates export --format markdown --limit 25
+```
+
+Audit defaults to `codex exec --ephemeral -`. Keep `--ephemeral` so audit runs do not create new Codex transcript sessions that pollute future search. Override when needed:
+
+```bash
+research me transcripts audit --command "claude -p" --limit 5
 ```
 
 Use `--project` to match Claude project folder names, transcript paths, and Codex `cwd/title` metadata:
@@ -49,7 +57,7 @@ Claude `agent-*.jsonl` auxiliary logs are skipped by default. Only add `--includ
 
 ## Output Quality Bar
 
-Good findings are broad AI-working lessons, not project notes.
+Good findings are broad AI-prompting lessons, not project notes.
 
 Prefer findings like:
 
@@ -60,6 +68,7 @@ Prefer findings like:
 - Tell AI to admit unknowns instead of guessing.
 - Make AI inspect real files, screens, docs, or outputs before rewriting.
 - Give AI both the desired tone and the anti-tone to avoid.
+- Make AI search and read exact prior examples before redoing research.
 
 Reject or down-rank:
 
@@ -68,6 +77,8 @@ Reject or down-rank:
 - generic advice like "write tests" without a sharper AI-specific move
 - summaries of a chat without a reusable behaviour change
 - private details or raw transcript quotes
+
+For larger backfills, search/read should come before audit. The desired future shape is exact transcript search plus QMD-style semantic search over cleaned transcript parts, but final findings must still point back to exact evidence.
 
 ## Candidate Work
 

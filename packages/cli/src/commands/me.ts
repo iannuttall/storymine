@@ -11,6 +11,8 @@ import { defineCommand } from 'citty'
 import { jsonFlag, numberArg, stringArg } from '../args.js'
 import { printJson, printTable } from '../utils.js'
 
+const DEFAULT_AUDIT_COMMAND = 'codex exec --ephemeral -'
+
 export const meCommand = defineCommand({
   meta: {
     name: 'me',
@@ -264,7 +266,9 @@ export const meCommand = defineCommand({
           args: {
             command: {
               type: 'string',
-              description: 'Model command that reads prompt from stdin',
+              default: DEFAULT_AUDIT_COMMAND,
+              description:
+                'Model command that reads prompt from stdin. Defaults to ephemeral Codex exec',
             },
             limit: {
               type: 'string',
@@ -288,12 +292,7 @@ export const meCommand = defineCommand({
             },
           },
           run: async ({ args }) => {
-            const command = stringArg(args.command)
-            if (!command) {
-              throw new Error(
-                'Pass --command, for example: --command "claude -p"',
-              )
-            }
+            const command = stringArg(args.command) ?? DEFAULT_AUDIT_COMMAND
             const shouldProgress = Boolean(args.progress) || !jsonFlag(args)
             const result = await auditPendingTranscriptChunks({
               limit: numberArg(args.limit, 10, { min: 1, max: 100 }),

@@ -2,6 +2,8 @@
 
 This repo is a local-first research collection CLI and MCP server. It turns local personal signals and AI transcript audits into high-quality candidates for newsletters and product-building content.
 
+The ultimate goal is an ongoing CLI workflow that humans or agents can schedule to audit past AI chats and extract hard-won prompting lessons: high-agency, non-obvious ways to steer AI while building real products every day.
+
 Build for two users:
 
 - Humans: concise commands, clear privacy controls, readable markdown exports.
@@ -13,8 +15,8 @@ The product is still early, but the architecture rule is fixed: `packages/core` 
 
 - `research me apps`, `research me history`, and `research me transcripts` are the personal collectors.
 - Personal collectors create `signals`; transcript audits create `transcript_findings`; only strong findings become `candidates`.
-- The transcript auditor is looking for AI-usage alpha, not project summaries.
-- Good findings should help a broad audience use AI better tomorrow.
+- The transcript auditor is looking for prompting alpha, not project summaries.
+- Good findings should help a broad audience prompt AI better tomorrow.
 - Reject project-specific implementation notes unless they translate into a reusable human move.
 - Transcript audit output must be evidence-backed, redacted, concise, and structured enough for another agent to act on.
 - Candidate exports should be useful as draft-agent input without requiring raw transcript access.
@@ -32,6 +34,7 @@ Good transcript findings look like:
 - agent failure modes such as overbuilding, cargo-culting, hallucinated certainty, weak defaults, generic copy, or shallow validation
 - privacy/safety moves such as explicit do-not-mention lists or secret redaction habits
 - context-management moves such as telling AI which examples are illustrative, not complete specs
+- search/read moves such as making AI find exact prior examples before redoing research
 
 Weak findings:
 
@@ -60,7 +63,7 @@ Transcript workflow:
 ```bash
 research me transcripts index --provider claude --project binday --limit 10
 research me transcripts parse --provider claude --limit 10 --maxTokens 2500
-research me transcripts audit --command "claude -p" --limit 5 --timeoutSeconds 180
+research me transcripts audit --limit 5 --timeoutSeconds 180
 research candidates promote --minConfidence 0.7 --limit 25
 research candidates export --format markdown --limit 25
 ```
@@ -78,6 +81,19 @@ Candidate promotion:
 - Duplicate findings attach to the same candidate and merge evidence.
 - `--maxPerAlphaType` caps one alpha type from dominating exports.
 - `--force` rebuilds candidates for already-promoted findings.
+
+Audit model command:
+
+- Default: `codex exec --ephemeral -`.
+- Keep `--ephemeral` so audit runs do not write new Codex sessions that pollute future transcript search.
+- Override with `--command "claude -p"` or another stdin-reading model command when explicitly needed.
+
+Search/read direction:
+
+- Add an exact history-search layer before larger audits: locate sessions, scan parts, then read only relevant parts.
+- Add a semantic layer later by materializing cleaned transcript parts as markdown-like docs that can be indexed by a QMD-style local engine.
+- Semantic search should find candidate moments, not replace exact transcript provenance.
+- Keep audit mode focused on clean user/assistant chunks; history search mode may include tool, patch, and subagent parts.
 
 ## Repo Map
 
@@ -187,7 +203,7 @@ rm -rf "$SCRATCH"
 Before calling candidate output "good", check:
 
 - Can someone use the tip without knowing the original project?
-- Is the human move concrete?
+- Is the prompting move concrete?
 - Is the mistake to avoid named clearly?
 - Is there an example prompt they could paste?
 - Is evidence paraphrased and non-private?

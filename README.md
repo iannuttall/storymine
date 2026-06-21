@@ -4,7 +4,7 @@ Local-first research collection CLI and MCP server for turning personal work sig
 
 `research` looks at local signals such as app usage, Chrome history, and AI coding transcripts. It filters private/noisy material, extracts reusable lessons, promotes the strongest findings into candidates, and exports structured markdown or JSON that another agent can use.
 
-The main goal right now is not "summarize what happened in a project". The goal is to find useful, general AI-working alpha: prompt patterns, verification loops, course corrections, agent failure modes, and workflow habits that help people get better output from AI.
+The main goal is not "summarize what happened in a project". The goal is an ongoing CLI workflow that can be scheduled by humans or agents to audit past AI chats and extract hard-won prompting lessons: high-agency, non-obvious ways to steer AI while building real products every day.
 
 ## What It Does
 
@@ -13,7 +13,7 @@ The main goal right now is not "summarize what happened in a project". The goal 
 - Indexes Claude and Codex transcript files incrementally.
 - Parses transcripts into focused user/assistant chunks, excluding system prompts, duplicated event messages, and chain-of-thought noise.
 - Redacts obvious secrets before audit prompts leave the machine.
-- Audits transcript chunks with a local model command such as `claude -p`.
+- Audits transcript chunks with a local model command. The default is `codex exec --ephemeral -`.
 - Extracts evidence-backed AI usage findings.
 - Promotes high-confidence findings into newsletter-shaped candidates.
 - Dedupes repeated findings and merges evidence from similar transcript moments.
@@ -51,9 +51,16 @@ Run a small transcript audit:
 ```bash
 research me transcripts index --provider claude --project binday --limit 10
 research me transcripts parse --provider claude --limit 10 --maxTokens 2500
-research me transcripts audit --command "claude -p" --limit 5 --timeoutSeconds 180
+research me transcripts audit --limit 5 --timeoutSeconds 180
 research candidates promote --minConfidence 0.7 --limit 25
 research candidates export --format markdown --limit 25
+```
+
+Override the model command when needed:
+
+```bash
+research me transcripts audit --command "claude -p" --limit 5
+research me transcripts audit --command "codex exec --ephemeral -" --limit 5
 ```
 
 Use `--project` to target transcript paths, Claude project folder names, or Codex `cwd` metadata:
@@ -84,6 +91,7 @@ Examples of good findings:
 - Use explicit "do not mention" lists when asking AI to write public-facing copy.
 - Make AI inspect the actual screen, file, or data before rewriting generic output.
 - Give AI both the desired tone and the anti-tone to avoid.
+- Make AI search and read exact prior examples before redoing research.
 
 Weak findings are rejected or should be ignored during review:
 
@@ -92,6 +100,19 @@ Weak findings are rejected or should be ignored during review:
 - Generic advice like "write tests" or "review output".
 - Summaries of a chat without a reusable behaviour change.
 - Anything that requires private context to understand.
+
+The best findings are usually about prompting: the exact instruction, constraint, verification loop, anti-example, or correction pattern that changed the AI's behaviour.
+
+## Search And Semantic Retrieval Direction
+
+The extraction pipeline should eventually have two retrieval layers:
+
+- exact history search/read: locate sessions, scan parts, and read the few messages that matter
+- semantic search over cleaned transcript parts: find conceptually similar prompting moments across agents and projects
+
+A QMD-style local index is a good fit for the second layer. The likely shape is to materialize cleaned transcript parts as markdown-like documents, index them with lexical and semantic search, then use search results to select which chunks to audit or review.
+
+Do not replace exact transcript provenance with summaries. Semantic search should help find candidates; final findings still need evidence-backed source parts.
 
 ## Candidate Export
 

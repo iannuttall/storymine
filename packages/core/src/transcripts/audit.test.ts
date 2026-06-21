@@ -62,7 +62,7 @@ test('auditPromptForChunk includes redaction contract', () => {
   assert.match(prompt, /redacted transcript chunk/)
   assert.match(prompt, /quickTip/)
   assert.match(prompt, /examplePrompt/)
-  assert.match(prompt, /AI-usage alpha/)
+  assert.match(prompt, /prompting alpha/)
   assert.match(prompt, /alphaScore/)
 })
 
