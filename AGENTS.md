@@ -52,6 +52,7 @@ Root commands:
 ```bash
 research candidates
 research doctor
+research findings
 research mcp
 research me
 research privacy
@@ -63,7 +64,11 @@ Transcript workflow:
 ```bash
 research me transcripts index --provider claude --project binday --limit 10
 research me transcripts parse --provider claude --limit 10 --maxTokens 2500
+research me transcripts search --query "generic copy inspect screen" --project binday
+research me transcripts read --session <session-id> --sequence <n>
 research me transcripts audit --limit 5 --timeoutSeconds 180
+research findings review --markdown --limit 10
+research findings approve --id <finding-id>
 research candidates promote --minConfidence 0.7 --limit 25
 research candidates export --format markdown --limit 25
 ```
@@ -87,13 +92,25 @@ Audit model command:
 - Default: `codex exec --ephemeral -`.
 - Keep `--ephemeral` so audit runs do not write new Codex sessions that pollute future transcript search.
 - Override with `--command "claude -p"` or another stdin-reading model command when explicitly needed.
+- Target audit batches with `--query`, `--project`, `--provider`, and `--status`.
+- Duplicate chunk text hashes are skipped by default during audit selection; use `--includeDuplicates` only when repeated chunks are intentionally useful.
 
-Search/read direction:
+Search/read/corpus direction:
 
-- Add an exact history-search layer before larger audits: locate sessions, scan parts, then read only relevant parts.
-- Add a semantic layer later by materializing cleaned transcript parts as markdown-like docs that can be indexed by a QMD-style local engine.
+- Use exact history search before larger audits: locate sessions, scan chunks, then read only relevant parts.
+- `research me transcripts search` returns chunk hits with session/file provenance.
+- `research me transcripts show --chunk <id>` prints one chunk as markdown.
+- `research me transcripts read --session <id> --sequence <n>` reads context around a session sequence.
+- `research me transcripts export-corpus --output <dir>` materializes cleaned transcript chunks as markdown docs for a QMD-style semantic engine.
 - Semantic search should find candidate moments, not replace exact transcript provenance.
 - Keep audit mode focused on clean user/assistant chunks; history search mode may include tool, patch, and subagent parts.
+
+Finding review:
+
+- `research findings review --markdown` lists unreviewed findings for human assessment.
+- `research findings approve --id <finding>` marks a strong reusable lesson.
+- `research findings reject --id <finding>` marks weak, generic, or project-specific output.
+- `research findings needs-work --id <finding>` marks useful-but-rough findings for later prompt/eval tuning.
 
 ## Repo Map
 
@@ -119,7 +136,10 @@ Core areas:
 - `packages/core/src/transcripts/parser.ts`: focused Claude/Codex message parsing.
 - `packages/core/src/transcripts/chunking.ts`: redacted transcript chunks.
 - `packages/core/src/transcripts/redaction.ts`: secret/email redaction.
-- `packages/core/src/transcripts/audit.ts`: AI-usage-alpha prompt and command model adapter.
+- `packages/core/src/transcripts/audit.ts`: prompting-alpha prompt, targeted audit selection, and command model adapter.
+- `packages/core/src/transcripts/search.ts`: exact transcript chunk search/read helpers.
+- `packages/core/src/transcripts/corpus.ts`: semantic-ready markdown corpus export.
+- `packages/core/src/transcripts/review.ts`: finding review helpers.
 - `packages/core/src/transcripts/processing.ts`: parse/index orchestration.
 - `packages/core/src/candidates.ts`: promotion, dedupe, markdown/JSON export.
 
@@ -129,6 +149,7 @@ CLI areas:
 - `packages/cli/src/args.ts`: shared argument parsing helpers.
 - `packages/cli/src/utils.ts`: terminal output helpers.
 - `packages/cli/src/commands/me.ts`: app/history/transcript commands.
+- `packages/cli/src/commands/findings.ts`: finding review commands.
 - `packages/cli/src/commands/candidates.ts`: promote/list/export commands.
 - `packages/cli/src/commands/system.ts`: privacy/doctor/reset commands.
 - `packages/cli/src/commands/mcp.ts`: MCP command helpers.
@@ -162,6 +183,7 @@ node packages/cli/dist/index.js --help
 node packages/cli/dist/index.js doctor
 node packages/cli/dist/index.js privacy
 node packages/cli/dist/index.js me transcripts --help
+node packages/cli/dist/index.js findings --help
 node packages/cli/dist/index.js candidates --help
 ```
 

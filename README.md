@@ -13,8 +13,11 @@ The main goal is not "summarize what happened in a project". The goal is an ongo
 - Indexes Claude and Codex transcript files incrementally.
 - Parses transcripts into focused user/assistant chunks, excluding system prompts, duplicated event messages, and chain-of-thought noise.
 - Redacts obvious secrets before audit prompts leave the machine.
+- Searches and reads cleaned transcript chunks with exact session/file provenance.
+- Exports cleaned chunks as markdown corpus files for a future semantic index.
 - Audits transcript chunks with a local model command. The default is `codex exec --ephemeral -`.
-- Extracts evidence-backed AI usage findings.
+- Extracts evidence-backed prompting findings.
+- Provides a review queue so humans can approve/reject findings before promotion.
 - Promotes high-confidence findings into newsletter-shaped candidates.
 - Dedupes repeated findings and merges evidence from similar transcript moments.
 - Exposes the same core through CLI and MCP.
@@ -51,7 +54,11 @@ Run a small transcript audit:
 ```bash
 research me transcripts index --provider claude --project binday --limit 10
 research me transcripts parse --provider claude --limit 10 --maxTokens 2500
+research me transcripts search --query "generic copy inspect screen" --project binday
+research me transcripts read --session <session-id> --sequence <n>
 research me transcripts audit --limit 5 --timeoutSeconds 180
+research findings review --markdown --limit 10
+research findings approve --id <finding-id>
 research candidates promote --minConfidence 0.7 --limit 25
 research candidates export --format markdown --limit 25
 ```
@@ -61,6 +68,13 @@ Override the model command when needed:
 ```bash
 research me transcripts audit --command "claude -p" --limit 5
 research me transcripts audit --command "codex exec --ephemeral -" --limit 5
+```
+
+Target audits with the same filters used by search:
+
+```bash
+research me transcripts audit --query "overbuilt" --project tidechecker --limit 5
+research me transcripts audit --provider codex --status failed --limit 5
 ```
 
 Use `--project` to target transcript paths, Claude project folder names, or Codex `cwd` metadata:
@@ -110,9 +124,28 @@ The extraction pipeline should eventually have two retrieval layers:
 - exact history search/read: locate sessions, scan parts, and read the few messages that matter
 - semantic search over cleaned transcript parts: find conceptually similar prompting moments across agents and projects
 
-A QMD-style local index is a good fit for the second layer. The likely shape is to materialize cleaned transcript parts as markdown-like documents, index them with lexical and semantic search, then use search results to select which chunks to audit or review.
+A QMD-style local index is a good fit for the second layer. The current bridge is:
+
+```bash
+research me transcripts export-corpus --output /tmp/research-transcript-corpus --project tidechecker --limit 100
+```
+
+That writes one markdown file per cleaned chunk with JSON provenance. A semantic engine can index those files, then feed exact chunk ids/session ids back into `search`, `show`, `read`, or targeted `audit`.
 
 Do not replace exact transcript provenance with summaries. Semantic search should help find candidates; final findings still need evidence-backed source parts.
+
+## Findings Review
+
+Audits are model output. Review findings before promotion:
+
+```bash
+research findings review --status unreviewed --markdown --limit 20
+research findings approve --id <finding-id> --notes "Strong reusable prompt."
+research findings reject --id <finding-id> --notes "Too project-specific."
+research findings needs-work --id <finding-id>
+```
+
+Review status is stored in finding metadata, so it does not require a schema migration.
 
 ## Candidate Export
 
@@ -198,9 +231,13 @@ Important files:
 - `packages/core/src/transcripts/parser.ts`: Claude/Codex transcript parsing.
 - `packages/core/src/transcripts/chunking.ts`: redacted chunk creation.
 - `packages/core/src/transcripts/audit.ts`: audit prompt and model-command adapter.
+- `packages/core/src/transcripts/search.ts`: exact transcript chunk search/read helpers.
+- `packages/core/src/transcripts/corpus.ts`: semantic-ready markdown corpus export.
+- `packages/core/src/transcripts/review.ts`: finding review queue helpers.
 - `packages/core/src/candidates.ts`: finding promotion, dedupe, candidate export.
 - `packages/core/src/storage/database.ts`: SQLite schema and storage helpers.
 - `packages/cli/src/commands/me.ts`: personal collector and transcript CLI.
+- `packages/cli/src/commands/findings.ts`: finding review CLI.
 - `packages/cli/src/commands/candidates.ts`: candidate promotion/list/export CLI.
 
 ## Development
@@ -221,6 +258,7 @@ node packages/cli/dist/index.js --help
 node packages/cli/dist/index.js doctor
 node packages/cli/dist/index.js privacy
 node packages/cli/dist/index.js me transcripts --help
+node packages/cli/dist/index.js findings --help
 node packages/cli/dist/index.js candidates --help
 ```
 

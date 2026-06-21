@@ -17,7 +17,7 @@ The product is local-first. Treat app usage, browser history, transcript files, 
    - `research_list_candidates`
    - `research_export_candidates`
    - `research_promote_findings`
-2. Use the CLI for collection, transcript indexing, parsing, audit, privacy, and reset.
+2. Use the CLI for collection, transcript indexing, search/read, corpus export, audit, review, privacy, and reset.
 3. In a source checkout, use `node packages/cli/dist/index.js` if the `research` binary is not linked.
 
 ## Core Workflow
@@ -34,7 +34,11 @@ Run a targeted transcript audit:
 ```bash
 research me transcripts index --provider claude --project <project> --limit 10
 research me transcripts parse --provider claude --limit 10 --maxTokens 2500
+research me transcripts search --query "generic copy inspect screen" --project <project>
+research me transcripts read --session <session-id> --sequence <n>
 research me transcripts audit --limit 5 --timeoutSeconds 180
+research findings review --markdown --limit 10
+research findings approve --id <finding-id>
 research candidates promote --minConfidence 0.7 --limit 25
 research candidates export --format markdown --limit 25
 ```
@@ -43,6 +47,13 @@ Audit defaults to `codex exec --ephemeral -`. Keep `--ephemeral` so audit runs d
 
 ```bash
 research me transcripts audit --command "claude -p" --limit 5
+```
+
+Use audit filters for focused runs:
+
+```bash
+research me transcripts audit --query "overbuilt" --project <project> --limit 5
+research me transcripts audit --provider codex --status failed --limit 5
 ```
 
 Use `--project` to match Claude project folder names, transcript paths, and Codex `cwd/title` metadata:
@@ -78,7 +89,34 @@ Reject or down-rank:
 - summaries of a chat without a reusable behaviour change
 - private details or raw transcript quotes
 
-For larger backfills, search/read should come before audit. The desired future shape is exact transcript search plus QMD-style semantic search over cleaned transcript parts, but final findings must still point back to exact evidence.
+For larger backfills, search/read should come before audit. Use:
+
+```bash
+research me transcripts search --query "<pattern>" --project <project> --json
+research me transcripts show --chunk <chunk-id>
+research me transcripts read --session <session-id> --sequence <n>
+```
+
+To feed a local semantic engine, export cleaned chunks as markdown with provenance:
+
+```bash
+research me transcripts export-corpus --output /tmp/research-transcript-corpus --project <project> --limit 100
+```
+
+Semantic search should find candidate moments; final findings must still point back to exact evidence.
+
+## Finding Review
+
+Review model findings before promotion:
+
+```bash
+research findings review --status unreviewed --markdown --limit 20
+research findings approve --id <finding-id>
+research findings reject --id <finding-id>
+research findings needs-work --id <finding-id>
+```
+
+Use approved/rejected/needs-work examples to tune the audit prompt later.
 
 ## Candidate Work
 

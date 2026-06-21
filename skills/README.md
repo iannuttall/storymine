@@ -17,4 +17,4 @@ node packages/cli/dist/index.js --help
 
 ## Included skills
 
-- `research`: collect personal signals, audit Claude/Codex transcripts, promote findings, and export newsletter candidate feeds.
+- `research`: collect personal signals, search/read/audit Claude/Codex transcripts, review findings, promote candidates, and export newsletter candidate feeds.
