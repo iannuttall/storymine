@@ -221,8 +221,11 @@ export function auditPromptForChunk(chunk: TranscriptChunk): string {
     '- alphaScore is audience value from 0 to 1. Only include findings with alphaScore >= 0.7.',
     '- quickTip must be useful to someone using AI tomorrow, even if they are not building this product.',
     '- Write quickTip as a general tip, not as "in this project..." or "for this repo...".',
-    '- quickTip should be a direct instruction that says what to ask the AI to do. Prefer "Ask AI to..." or "Make AI..." over vague phrases.',
-    '- Avoid cute contrasts like "not just...", "finish line", "north star", "guardrails", "playbook", or other idioms if they hide the concrete instruction.',
+    '- quickTip should be a direct instruction that says what to ask the AI to do. Start with a direct verb such as "Ask", "Tell", "Make", "Use", "Run", "Check", "Compare", "Test", "Ban", "Point", or "Convert".',
+    '- Do not write quickTip as "Before...", "After...", or "When..." followed by a comma. That usually creates an AI-smell headline instead of an instruction.',
+    '- Avoid cute contrasts like "not just...", "not a...", "rather than...", "instead of...", "finish line", "north star", "guardrails", "playbook", or other idioms if they hide the concrete instruction.',
+    '- Do not use em dashes, en dashes, or colon-as-pause phrasing in quickTip.',
+    '- Avoid jargon like "greenfield", "caveat", "fixtures", "transport", or "idempotent" in quickTip unless you explain it in plain English.',
     '- For stop, steer, pushback, reminder, scope-reset, or validation-demand moments, set alphaType to "human-steering" unless a narrower alphaType is clearly stronger.',
     '- interventionType should describe the human move. Use "none" only when the finding is valuable but not an intervention moment.',
     '- betterMove must be the concrete prompting move that improves the AI interaction.',
@@ -242,31 +245,31 @@ export function auditPromptForChunk(chunk: TranscriptChunk): string {
     'Good quickTip: "Before asking AI to process a pile of data, make it measure the pile first."',
     '',
     'Bad quickTip: "Keep CLI wrappers thin."',
-    'Good quickTip: "When AI copies a pattern from another project, ask it to justify why that pattern fits this one."',
+    'Good quickTip: "Ask AI to justify copied patterns before accepting them."',
     '',
     'Bad quickTip: "Improve landing page copy."',
-    'Good quickTip: "When AI writes generic copy, make it inspect the real screen or data before rewriting."',
+    'Good quickTip: "Make AI inspect the real screen or data before it rewrites generic copy."',
     '',
     'Bad quickTip: "The agent made a mistake."',
-    'Good quickTip: "When an AI drifts from your standard, stop it immediately and restate the rule in reusable terms."',
+    'Good quickTip: "Stop AI as soon as it drifts and restate the rule it missed."',
     '',
     'Bad quickTip: "Clarify the project goal."',
-    'Good quickTip: "When an AI gives project-specific findings after you asked for broad lessons, push back by naming the audience and the level of abstraction again."',
+    'Good quickTip: "Tell AI the audience and level of abstraction again when it gives project-specific findings."',
     '',
     'Bad quickTip: "Remind the agent about requirements."',
-    'Good quickTip: "When an AI forgets a standing rule, quote the missed rule back and ask it to update the plan before touching code."',
+    'Good quickTip: "Tell AI to update the plan after you quote the standing rule it missed."',
     '',
     'Bad quickTip: "Use semantic search for logs."',
-    'Good quickTip: "Before asking AI to audit a big chat archive, make it search for exact past examples and read only the relevant parts."',
+    'Good quickTip: "Make AI search exact past examples before it audits a large chat archive."',
     '',
     'Bad quickTip: "Prompt for idempotence."',
-    'Good quickTip: "For expensive AI work, ask it to make the process restartable so failed runs do not waste the work already done."',
+    'Good quickTip: "Ask AI to make expensive work restartable before it starts."',
     '',
     'Bad quickTip: "Fix UI choices."',
-    'Good quickTip: "When AI overcomplicates a UI, ask it what can be removed before asking it to polish the design."',
+    'Good quickTip: "Ask AI what can be removed before it polishes an overcomplicated UI."',
     '',
     'Bad quickTip: "Give agents a finish line, not just a task list."',
-    'Good quickTip: "Ask AI to turn a plan into an execution loop: do one task, test it, commit it, then move to the next."',
+    'Good quickTip: "Ask AI to work through one task at a time, run checks, commit, and continue."',
     '',
     `Provider: ${chunk.provider}`,
     `Session: ${chunk.sessionId}`,
@@ -298,6 +301,7 @@ export function parseAuditResponse(output: string): ParsedFinding[] {
       confidence === null ||
       alphaScore === null ||
       alphaScore < 0.7 ||
+      hasWeakQuickTip(lesson) ||
       !actionForAgent ||
       evidence.length === 0
     ) {
@@ -432,4 +436,39 @@ function asString(value: unknown): string | null {
 
 function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function hasWeakQuickTip(value: string): boolean {
+  const text = value.trim()
+  const lower = text.toLowerCase()
+  if (
+    !/^(ask|tell|make|use|run|check|compare|test|ban|point|convert|create|name|set|keep|stop|require)\b/i.test(
+      text,
+    )
+  ) {
+    return true
+  }
+  if (/[—–]/.test(text)) return true
+  if (/\bnot just\b|\bnot a\b|\brather than\b|\binstead of\b/i.test(text)) {
+    return true
+  }
+  if (
+    /\b(finish line|north star|guardrails|playbook|wishlist|wish list)\b/i.test(
+      text,
+    )
+  ) {
+    return true
+  }
+  if (/\b(greenfield|caveat|leverage|seamless|robust)\b/i.test(text)) {
+    return true
+  }
+  if (/^(before|after|when)\b.+,/i.test(text)) return true
+  if (/^[^.!?]{1,80}: /.test(text)) return true
+  if (
+    lower.startsWith('it is important') ||
+    lower.startsWith("it's important")
+  ) {
+    return true
+  }
+  return false
 }

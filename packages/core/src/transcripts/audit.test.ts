@@ -91,7 +91,7 @@ test('auditPromptForChunk includes redaction contract', () => {
   assert.match(prompt, /pushed back/)
   assert.match(prompt, /smart beginners/)
   assert.match(prompt, /slogans/)
-  assert.match(prompt, /execution loop/)
+  assert.match(prompt, /one task at a time/)
 })
 
 test('parseAuditResponse rejects low-alpha findings', () => {
@@ -116,6 +116,50 @@ test('parseAuditResponse rejects low-alpha findings', () => {
 
   assert.equal(findings.length, 0)
 })
+
+test('parseAuditResponse rejects AI-smell quick tips', () => {
+  const findings = parseAuditResponse(
+    JSON.stringify({
+      findings: [
+        modelFinding(
+          'Turn a recommendation into an execution loop, not a wishlist.',
+        ),
+        modelFinding(
+          'Before an AI rebuilds anything, make it produce a feature parity plan.',
+        ),
+        modelFinding(
+          'Ask AI to compare against the old system: then write the plan.',
+        ),
+        modelFinding(
+          'Ask AI to produce a greenfield plan before it writes code.',
+        ),
+        modelFinding('Give agents a finish line, not just a task list.'),
+      ],
+    }),
+  )
+
+  assert.equal(findings.length, 0)
+})
+
+function modelFinding(quickTip: string): Record<string, unknown> {
+  return {
+    quickTip,
+    whyItWorks: 'It names a reusable prompting move.',
+    plainEnglishWhy:
+      'It makes the agent do clearer work that another person can check.',
+    mistakeToAvoid: 'Accepting vague model output.',
+    betterMove: 'Ask for the concrete next action and verification step.',
+    examplePrompt:
+      'Turn this into a checklist with one task, one test step, and one commit per item.',
+    alphaType: 'scope-control',
+    interventionType: 'steer',
+    skillPotential: 'workflow',
+    alphaScore: 0.9,
+    category: 'prompting',
+    confidence: 0.9,
+    evidence: ['The user asked for a clearer execution loop.'],
+  }
+}
 
 test('model interface supports deterministic fake adapters', async () => {
   const model: TranscriptAuditModel = {

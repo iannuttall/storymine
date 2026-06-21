@@ -17,13 +17,13 @@ export const promptingAlphaFixtures: PromptingAlphaFixture[] = [
     id: 'feature-parity-plan-pushback',
     label: 'strong',
     quickTip:
-      'Before an AI rebuilds anything, make it produce a feature-parity plan against the old system.',
+      'Ask AI to compare a rebuild plan against the old system before it writes code.',
     alphaType: 'human-steering',
     interventionType: 'pushback',
     plainEnglishWhy:
       'It stops the AI shipping a smaller new version that quietly loses features people already rely on.',
     skillPotential: 'workflow',
-    why: 'The human caught the agent treating a production replacement like a greenfield MVP and forced a complete parity plan.',
+    why: 'The human caught the agent treating a production replacement like a smaller new app and forced a complete parity plan.',
     examplePrompt:
       'Before coding, audit the old system for feature parity. Produce a complete task list with acceptance tests for every old behaviour, then implement one item at a time.',
   },
@@ -31,7 +31,7 @@ export const promptingAlphaFixtures: PromptingAlphaFixture[] = [
     id: 'second-pass-existing-behaviour',
     label: 'strong',
     quickTip:
-      'When AI proposes a rebuild, ask it to inspect the existing behaviour that affects outcomes.',
+      'Make AI check how the current system works before it designs the replacement.',
     alphaType: 'verification-loop',
     interventionType: 'validation-demand',
     plainEnglishWhy:
@@ -45,7 +45,7 @@ export const promptingAlphaFixtures: PromptingAlphaFixture[] = [
     id: 'audit-working-examples-first',
     label: 'strong',
     quickTip:
-      'When an AI keeps breaking a feature, switch from "fix it" to "audit the working examples first."',
+      'Make AI compare against working examples before it tries another fix.',
     alphaType: 'human-steering',
     interventionType: 'scope-reset',
     plainEnglishWhy:
@@ -58,8 +58,7 @@ export const promptingAlphaFixtures: PromptingAlphaFixture[] = [
   {
     id: 'defaults-over-knobs',
     label: 'strong',
-    quickTip:
-      'If an AI starts adding lots of configuration, steer it toward strong defaults plus optional overrides.',
+    quickTip: 'Tell AI to pick strong defaults before it adds more settings.',
     alphaType: 'human-steering',
     interventionType: 'steer',
     plainEnglishWhy:
@@ -72,8 +71,7 @@ export const promptingAlphaFixtures: PromptingAlphaFixture[] = [
   {
     id: 'post-fix-failure-mode',
     label: 'strong',
-    quickTip:
-      'After an AI fixes a messy bug, ask what the previous agents were probably missing.',
+    quickTip: 'Ask AI what earlier attempts missed after it fixes a messy bug.',
     alphaType: 'verification-loop',
     interventionType: 'validation-demand',
     plainEnglishWhy:
@@ -81,13 +79,12 @@ export const promptingAlphaFixtures: PromptingAlphaFixture[] = [
     skillPotential: 'debugging',
     why: 'The follow-up question turns a fix into a reusable debugging lesson about the missed failure mode.',
     examplePrompt:
-      'What was the actual issue the previous attempts missed? Explain the failure mode, not just the code change.',
+      'What was the actual issue the previous attempts missed? Explain the failure mode and the code change.',
   },
   {
     id: 'restartable-expensive-work',
     label: 'strong',
-    quickTip:
-      'For expensive AI work, ask it to make the process restartable before it starts.',
+    quickTip: 'Ask AI to make expensive work restartable before it starts.',
     alphaType: 'prompt-pattern',
     interventionType: 'steer',
     plainEnglishWhy:
@@ -100,8 +97,7 @@ export const promptingAlphaFixtures: PromptingAlphaFixture[] = [
   {
     id: 'plan-to-execution-loop',
     label: 'strong',
-    quickTip:
-      'Ask AI to turn a plan into an execution loop: do one task, test it, commit it, then continue.',
+    quickTip: 'Ask AI to implement one task, run checks, commit, and continue.',
     alphaType: 'scope-control',
     interventionType: 'steer',
     plainEnglishWhy:
@@ -115,13 +111,13 @@ export const promptingAlphaFixtures: PromptingAlphaFixture[] = [
     id: 'remove-ui-choices-before-polish',
     label: 'strong',
     quickTip:
-      'When AI overcomplicates a UI, ask what can be removed before asking it to polish the design.',
+      'Ask AI what can be removed before it polishes an overcomplicated UI.',
     alphaType: 'scope-control',
     interventionType: 'steer',
     plainEnglishWhy:
       'AI often adds extra buttons, panels, and choices. Removing unnecessary decisions usually improves the product more than visual polish.',
     skillPotential: 'ui',
-    why: 'UI lessons can become reusable frontend skill rules, not just newsletter items.',
+    why: 'UI lessons can become reusable frontend skill rules and newsletter items.',
     examplePrompt:
       'Before styling this screen, list what can be removed. Keep the primary action, remove secondary choices unless they are necessary, then polish the simpler UI.',
   },

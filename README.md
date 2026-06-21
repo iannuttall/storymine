@@ -120,9 +120,9 @@ Weak findings are rejected or should be ignored during review:
 
 The best findings are usually intervention moments: the exact instruction, constraint, verification loop, anti-example, pushback, reminder, or correction pattern that changed the AI's behaviour. Prefer findings that can say what the AI was about to do wrong, how the human steered it, and what reusable prompt move follows from that.
 
-Good findings can be technical, but they should be explainable to smart beginners. For example, "prompt for idempotence" is better framed as "ask AI to make expensive work restartable so failed runs do not waste completed work." Repeated UI, performance, debugging, and workflow findings can later become reusable agent skills.
+Good findings can be technical, but they should be explainable to smart beginners. For example, replace "prompt for idempotence" with "ask AI to make expensive work restartable so failed runs do not waste completed work." Repeated UI, performance, debugging, and workflow findings can later become reusable agent skills.
 
-Do not flatten strong findings into vague slogans. "Give agents a finish line, not just a task list" is weaker than "Ask AI to turn a plan into an execution loop: do one task, test it, commit it, then move to the next." The title should carry the actual prompt move.
+Do not flatten strong findings into vague slogans. Reject headings like "Give agents a finish line." Use direct instructions such as "Ask AI to implement one task, run checks, commit, and continue." The title should carry the actual prompt move.
 
 ## Search And Semantic Retrieval Direction
 

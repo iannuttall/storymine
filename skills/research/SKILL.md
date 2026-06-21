@@ -85,7 +85,7 @@ Prefer findings like:
 - Label the intervention type: stop, steer, pushback, reminder, scope-reset, or validation-demand.
 - Explain technical alpha in plain English for smart beginners.
 - Mark repeated UI, performance, debugging, research, or workflow lessons as future skill material.
-- Use direct titles that name the concrete prompt move; avoid slogans, idioms, and vague "not just" contrast lines.
+- Use direct titles that name the concrete prompt move; avoid slogans, idioms, and X-versus-Y contrast lines.
 
 Reject or down-rank:
 

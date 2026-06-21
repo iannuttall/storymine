@@ -32,8 +32,15 @@ test('prompting alpha fixtures are newsletter-safe examples', () => {
     assert.ok(fixture.why.length > 20)
     assert.ok(fixture.plainEnglishWhy.length > 20)
     assert.ok(fixture.examplePrompt.length > 20)
+    assert.match(
+      fixture.quickTip,
+      /^(Ask|Tell|Make|Use|Run|Check|Compare|Test|Ban|Point|Convert|Create|Name|Set|Keep|Stop|Require)\b/,
+    )
     assert.doesNotMatch(fixture.quickTip, /this repo|this project/i)
     assert.doesNotMatch(fixture.quickTip, /not just/i)
+    assert.doesNotMatch(fixture.quickTip, /[—–]/)
+    assert.doesNotMatch(fixture.quickTip, /^[^.!?]{1,80}: /)
+    assert.doesNotMatch(fixture.quickTip, /\bgreenfield|caveat|wishlist/i)
     assert.doesNotMatch(fixture.examplePrompt, /\/Users\//)
   }
 })
