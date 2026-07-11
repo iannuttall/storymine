@@ -12,6 +12,7 @@ import {
   nowIso,
   stableId,
 } from './storage/database.js'
+import { isCompleteStoryFinding } from './transcripts/story-ranking.js'
 
 export interface PromoteFindingsOptions {
   minConfidence?: number
@@ -34,7 +35,7 @@ export function promoteTranscriptFindings(
       minConfidence: options.minConfidence ?? 0.7,
       withoutCandidate: !options.force,
       limit: Math.max(options.limit ?? 25, 100),
-    }),
+    }).filter(isCompleteStoryFinding),
   )
   const findings = diversifyFindings(
     groups,

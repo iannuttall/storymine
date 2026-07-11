@@ -1,5 +1,6 @@
 export const researchCoreVersion = '0.1.0'
 
+export * from './artifacts/scan.js'
 export * from './candidates.js'
 export * from './collectors/app-usage.js'
 export * from './collectors/chrome-history.js'
@@ -17,3 +18,6 @@ export * from './transcripts/processing.js'
 export * from './transcripts/redaction.js'
 export * from './transcripts/review.js'
 export * from './transcripts/search.js'
+export * from './transcripts/stories.js'
+export * from './transcripts/story-ranking.js'
+export * from './transcripts/summarize.js'
