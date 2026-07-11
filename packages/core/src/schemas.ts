@@ -7,6 +7,7 @@ export const sourceSchema = z.enum([
   'github',
   'producthunt',
   'submission',
+  'artifact',
 ])
 
 export const privacyLevelSchema = z.enum([
@@ -113,6 +114,7 @@ export const transcriptFindingCategorySchema = z.enum([
   'debugging',
   'agent-behaviour',
   'workflow',
+  'story',
 ])
 
 export const transcriptFindingSchema = z.object({
@@ -129,6 +131,24 @@ export const transcriptFindingSchema = z.object({
   metadata: jsonRecordSchema.default({}),
 })
 
+export const sessionSummarySchema = z.object({
+  sessionId: z.string().min(1),
+  provider: transcriptProviderSchema,
+  cwd: z.string().nullable().default(null),
+  title: z.string().nullable().default(null),
+  summary: z.string().min(1),
+  built: z.string().nullable().default(null),
+  problems: z.string().nullable().default(null),
+  failedApproaches: z.array(z.string().min(1)).default([]),
+  whatWorked: z.string().nullable().default(null),
+  toolsCreated: z.array(z.string().min(1)).default([]),
+  opinions: z.array(z.string().min(1)).default([]),
+  model: z.string().nullable().default(null),
+  chunkCount: z.number().int().nonnegative().default(0),
+  createdAt: isoDateSchema,
+  metadata: jsonRecordSchema.default({}),
+})
+
 export type Source = z.infer<typeof sourceSchema>
 export type SourceRun = z.infer<typeof sourceRunSchema>
 export type Signal = z.infer<typeof signalSchema>
@@ -138,3 +158,4 @@ export type TranscriptFile = z.infer<typeof transcriptFileSchema>
 export type TranscriptSession = z.infer<typeof transcriptSessionSchema>
 export type TranscriptChunk = z.infer<typeof transcriptChunkSchema>
 export type TranscriptFinding = z.infer<typeof transcriptFindingSchema>
+export type SessionSummary = z.infer<typeof sessionSummarySchema>

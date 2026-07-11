@@ -6,9 +6,11 @@ import { fileSize, getResearchPaths } from '../paths.js'
 import {
   type Candidate,
   candidateSchema,
+  type SessionSummary,
   type Signal,
   type Source,
   type SourceRun,
+  sessionSummarySchema,
   signalSchema,
   sourceRunSchema,
   type TranscriptChunk,
@@ -136,6 +138,25 @@ CREATE TABLE IF NOT EXISTS transcript_findings (
 );
 CREATE INDEX IF NOT EXISTS idx_transcript_findings_category
   ON transcript_findings(category, confidence DESC);
+
+CREATE TABLE IF NOT EXISTS session_summaries (
+  session_id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  cwd TEXT,
+  title TEXT,
+  summary TEXT NOT NULL,
+  built TEXT,
+  problems TEXT,
+  failed_approaches_json TEXT NOT NULL DEFAULT '[]',
+  what_worked TEXT,
+  tools_created_json TEXT NOT NULL DEFAULT '[]',
+  opinions_json TEXT NOT NULL DEFAULT '[]',
+  model TEXT,
+  chunk_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL,
+  FOREIGN KEY(session_id) REFERENCES transcript_sessions(id) ON DELETE CASCADE
+);
 `
 
 let db: Database.Database | undefined
@@ -779,6 +800,249 @@ export function resetTranscriptAuditData(
   }
 }
 
+export interface TranscriptSessionWindowOptions {
+  sinceMs?: number
+  provider?: string
+  project?: string
+  limit?: number
+}
+
+export function listTranscriptSessionsInWindow(
+  database: Database.Database,
+  options: TranscriptSessionWindowOptions = {},
+): TranscriptSession[] {
+  const limit = Math.max(1, Math.min(options.limit ?? 500, 5000))
+  const sinceIso =
+    options.sinceMs !== undefined
+      ? new Date(options.sinceMs).toISOString()
+      : null
+  const like = options.project ? `%${options.project.toLowerCase()}%` : null
+  const rows = database
+    .prepare(
+      `SELECT
+        s.id,
+        s.provider,
+        s.file_id AS fileId,
+        s.title,
+        s.cwd,
+        s.started_at AS startedAt,
+        s.updated_at AS updatedAt,
+        s.message_count AS messageCount,
+        s.metadata_json AS metadataJson
+      FROM transcript_sessions s
+      JOIN transcript_files f ON f.id = s.file_id
+      WHERE (@provider IS NULL OR s.provider = @provider)
+        AND (@since IS NULL OR COALESCE(s.updated_at, s.started_at, '') >= @since)
+        AND (
+          @like IS NULL
+          OR LOWER(COALESCE(s.cwd, '')) LIKE @like
+          OR LOWER(COALESCE(s.title, '')) LIKE @like
+          OR LOWER(COALESCE(f.path, '')) LIKE @like
+        )
+      ORDER BY COALESCE(s.updated_at, s.started_at, '') DESC
+      LIMIT @limit`,
+    )
+    .all({
+      provider: options.provider ?? null,
+      since: sinceIso,
+      like,
+      limit,
+    }) as Array<Omit<TranscriptSession, 'metadata'> & { metadataJson: string }>
+  return rows.map((row) =>
+    transcriptSessionSchema.parse({
+      ...row,
+      metadata: parseJsonRecord(row.metadataJson),
+    }),
+  )
+}
+
+export function listChunksForSession(
+  database: Database.Database,
+  sessionId: string,
+  limit = 400,
+): TranscriptChunk[] {
+  const rows = database
+    .prepare(
+      `SELECT
+        id,
+        session_id AS sessionId,
+        provider,
+        sequence,
+        token_estimate AS tokenEstimate,
+        text_hash AS textHash,
+        redacted_text AS redactedText,
+        redaction_count AS redactionCount,
+        audit_status AS auditStatus,
+        metadata_json AS metadataJson
+      FROM transcript_chunks
+      WHERE session_id = @sessionId
+      ORDER BY sequence ASC
+      LIMIT @limit`,
+    )
+    .all({ sessionId, limit: Math.max(1, Math.min(limit, 5000)) }) as Array<
+    Omit<TranscriptChunk, 'metadata'> & { metadataJson: string }
+  >
+  return rows.map((row) =>
+    transcriptChunkSchema.parse({
+      ...row,
+      metadata: parseJsonRecord(row.metadataJson),
+    }),
+  )
+}
+
+export function upsertSessionSummary(
+  database: Database.Database,
+  summary: SessionSummary,
+): void {
+  const parsed = sessionSummarySchema.parse(summary)
+  database
+    .prepare(
+      `INSERT INTO session_summaries (
+        session_id, provider, cwd, title, summary, built, problems,
+        failed_approaches_json, what_worked, tools_created_json, opinions_json,
+        model, chunk_count, created_at, metadata_json
+      ) VALUES (
+        @sessionId, @provider, @cwd, @title, @summary, @built, @problems,
+        @failedApproachesJson, @whatWorked, @toolsCreatedJson, @opinionsJson,
+        @model, @chunkCount, @createdAt, @metadataJson
+      )
+      ON CONFLICT(session_id) DO UPDATE SET
+        provider = excluded.provider,
+        cwd = excluded.cwd,
+        title = excluded.title,
+        summary = excluded.summary,
+        built = excluded.built,
+        problems = excluded.problems,
+        failed_approaches_json = excluded.failed_approaches_json,
+        what_worked = excluded.what_worked,
+        tools_created_json = excluded.tools_created_json,
+        opinions_json = excluded.opinions_json,
+        model = excluded.model,
+        chunk_count = excluded.chunk_count,
+        created_at = excluded.created_at,
+        metadata_json = excluded.metadata_json`,
+    )
+    .run({
+      ...parsed,
+      failedApproachesJson: JSON.stringify(parsed.failedApproaches),
+      toolsCreatedJson: JSON.stringify(parsed.toolsCreated),
+      opinionsJson: JSON.stringify(parsed.opinions),
+      metadataJson: JSON.stringify(parsed.metadata),
+    })
+}
+
+export function getSessionSummary(
+  database: Database.Database,
+  sessionId: string,
+): SessionSummary | null {
+  const row = sessionSummaryRow(database, `WHERE session_id = @sessionId`, {
+    sessionId,
+  })[0]
+  return row ?? null
+}
+
+export function hasSessionSummary(
+  database: Database.Database,
+  sessionId: string,
+): boolean {
+  const row = database
+    .prepare(`SELECT 1 FROM session_summaries WHERE session_id = @sessionId`)
+    .get({ sessionId })
+  return Boolean(row)
+}
+
+export function listSessionSummaries(
+  database: Database.Database,
+  options: { sinceMs?: number; limit?: number } = {},
+): SessionSummary[] {
+  const limit = Math.max(1, Math.min(options.limit ?? 500, 5000))
+  const sinceIso =
+    options.sinceMs !== undefined
+      ? new Date(options.sinceMs).toISOString()
+      : null
+  return sessionSummaryRow(
+    database,
+    `WHERE (@since IS NULL OR created_at >= @since)
+     ORDER BY created_at DESC
+     LIMIT @limit`,
+    { since: sinceIso, limit },
+  )
+}
+
+function sessionSummaryRow(
+  database: Database.Database,
+  clause: string,
+  params: Record<string, unknown>,
+): SessionSummary[] {
+  const rows = database
+    .prepare(
+      `SELECT
+        session_id AS sessionId,
+        provider,
+        cwd,
+        title,
+        summary,
+        built,
+        problems,
+        failed_approaches_json AS failedApproachesJson,
+        what_worked AS whatWorked,
+        tools_created_json AS toolsCreatedJson,
+        opinions_json AS opinionsJson,
+        model,
+        chunk_count AS chunkCount,
+        created_at AS createdAt,
+        metadata_json AS metadataJson
+      FROM session_summaries
+      ${clause}`,
+    )
+    .all(params) as Array<{
+    sessionId: string
+    provider: string
+    cwd: string | null
+    title: string | null
+    summary: string
+    built: string | null
+    problems: string | null
+    failedApproachesJson: string
+    whatWorked: string | null
+    toolsCreatedJson: string
+    opinionsJson: string
+    model: string | null
+    chunkCount: number
+    createdAt: string
+    metadataJson: string
+  }>
+  return rows.map((row) =>
+    sessionSummarySchema.parse({
+      sessionId: row.sessionId,
+      provider: row.provider,
+      cwd: row.cwd,
+      title: row.title,
+      summary: row.summary,
+      built: row.built,
+      problems: row.problems,
+      failedApproaches: parseJsonStringArray(row.failedApproachesJson),
+      whatWorked: row.whatWorked,
+      toolsCreated: parseJsonStringArray(row.toolsCreatedJson),
+      opinions: parseJsonStringArray(row.opinionsJson),
+      model: row.model,
+      chunkCount: row.chunkCount,
+      createdAt: row.createdAt,
+      metadata: parseJsonRecord(row.metadataJson),
+    }),
+  )
+}
+
+function parseJsonStringArray(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((item): item is string => typeof item === 'string')
+  } catch {
+    return []
+  }
+}
+
 export function getStorageStats(
   database: Database.Database = getDb(),
   dbPath = getResearchPaths().cacheDbFile,
@@ -791,6 +1055,7 @@ export function getStorageStats(
     ['transcriptSessions', 'transcript_sessions'],
     ['transcriptChunks', 'transcript_chunks'],
     ['transcriptFindings', 'transcript_findings'],
+    ['sessionSummaries', 'session_summaries'],
   ] as const
   const counts = Object.fromEntries(
     tableNames.map(([key, table]) => {
