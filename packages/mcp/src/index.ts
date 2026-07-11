@@ -11,7 +11,12 @@ import {
 } from '@research/core'
 import { z } from 'zod'
 
-const DEFAULT_MODEL_COMMAND = 'codex exec --ephemeral -'
+// Bulk summarization runs on the cheaper terra model; deep passes get xhigh
+// reasoning. Never default to the sol model.
+const DEFAULT_SUMMARIZE_COMMAND =
+  'codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --ephemeral -'
+const DEFAULT_DEEP_COMMAND =
+  'codex exec -m gpt-5.6-terra -c model_reasoning_effort=xhigh --ephemeral -'
 
 export function createServer(): McpServer {
   const server = new McpServer(
@@ -70,7 +75,7 @@ export function createServer(): McpServer {
       project: z.string().optional(),
       provider: z.enum(['claude', 'codex']).optional(),
       limit: z.number().int().min(1).max(1000).default(50),
-      command: z.string().default(DEFAULT_MODEL_COMMAND),
+      command: z.string().default(DEFAULT_SUMMARIZE_COMMAND),
       force: z.boolean().default(false),
     },
     async ({ days, project, provider, limit, command, force }) =>
@@ -93,7 +98,7 @@ export function createServer(): McpServer {
       days: z.number().int().min(1).max(365).default(7),
       limit: z.number().int().min(1).max(50).default(10),
       provider: z.enum(['claude', 'codex']).optional(),
-      command: z.string().default(DEFAULT_MODEL_COMMAND),
+      command: z.string().default(DEFAULT_DEEP_COMMAND),
     },
     async ({ days, limit, provider, command }) =>
       jsonResult(

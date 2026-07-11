@@ -43,8 +43,6 @@ const TOOL_WORDS = [
   'pnpm',
   'codex',
   'claude',
-  'resvg',
-  'ciede',
   'svg',
   'png',
   'sqlite',

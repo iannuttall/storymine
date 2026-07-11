@@ -21,7 +21,12 @@ import { defineCommand } from 'citty'
 import { jsonFlag, numberArg, stringArg } from '../args.js'
 import { printJson, printTable } from '../utils.js'
 
-const DEFAULT_AUDIT_COMMAND = 'codex exec --ephemeral -'
+// Bulk summarization runs on the cheaper terra model; deep passes (audit,
+// story mining) get xhigh reasoning. Never default to the sol model.
+const DEFAULT_SUMMARIZE_COMMAND =
+  'codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --ephemeral -'
+const DEFAULT_DEEP_COMMAND =
+  'codex exec -m gpt-5.6-terra -c model_reasoning_effort=xhigh --ephemeral -'
 
 export const meCommand = defineCommand({
   meta: {
@@ -276,7 +281,7 @@ export const meCommand = defineCommand({
           args: {
             command: {
               type: 'string',
-              default: DEFAULT_AUDIT_COMMAND,
+              default: DEFAULT_DEEP_COMMAND,
               description:
                 'Model command that reads prompt from stdin. Defaults to ephemeral Codex exec',
             },
@@ -325,7 +330,7 @@ export const meCommand = defineCommand({
             },
           },
           run: async ({ args }) => {
-            const command = stringArg(args.command) ?? DEFAULT_AUDIT_COMMAND
+            const command = stringArg(args.command) ?? DEFAULT_DEEP_COMMAND
             const shouldProgress = Boolean(args.progress) || !jsonFlag(args)
             const provider = transcriptProviderArg(args.provider)
             const query = stringArg(args.query)
@@ -701,7 +706,7 @@ export const meCommand = defineCommand({
         },
         command: {
           type: 'string',
-          default: DEFAULT_AUDIT_COMMAND,
+          default: DEFAULT_SUMMARIZE_COMMAND,
           description: 'Model command that reads a prompt from stdin',
         },
         maxTokens: {
@@ -731,7 +736,7 @@ export const meCommand = defineCommand({
         },
       },
       run: async ({ args }) => {
-        const command = stringArg(args.command) ?? DEFAULT_AUDIT_COMMAND
+        const command = stringArg(args.command) ?? DEFAULT_SUMMARIZE_COMMAND
         const provider = transcriptProviderArg(args.provider)
         const project = stringArg(args.project)
         const shouldProgress = Boolean(args.progress) || !jsonFlag(args)
@@ -845,7 +850,7 @@ export const meCommand = defineCommand({
         },
         command: {
           type: 'string',
-          default: DEFAULT_AUDIT_COMMAND,
+          default: DEFAULT_DEEP_COMMAND,
           description: 'Model command that reads a prompt from stdin',
         },
         maxTokens: {
@@ -870,7 +875,7 @@ export const meCommand = defineCommand({
         },
       },
       run: async ({ args }) => {
-        const command = stringArg(args.command) ?? DEFAULT_AUDIT_COMMAND
+        const command = stringArg(args.command) ?? DEFAULT_DEEP_COMMAND
         const provider = transcriptProviderArg(args.provider)
         const shouldProgress = Boolean(args.progress) || !jsonFlag(args)
         const result = await mineStories({
