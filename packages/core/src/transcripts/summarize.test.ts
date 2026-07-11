@@ -161,3 +161,74 @@ test('summarizeSessions skips sessions with no chunks', async () => {
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('summarizeSessions overlaps model calls up to the concurrency limit', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'research-summarize-'))
+  try {
+    const db = openResearchDb(join(dir, 'test.db'))
+    upsertTranscriptFiles(db, [
+      {
+        id: 'file_1',
+        provider: 'claude',
+        path: join('/tmp', 'many.jsonl'),
+        sizeBytes: 100,
+        modifiedAtMs: Date.now(),
+        hash: 'hash_many',
+        indexedAt: null,
+        status: 'indexed',
+        error: null,
+      },
+    ])
+    for (let index = 0; index < 6; index += 1) {
+      upsertTranscriptSession(db, {
+        id: `session_${index}`,
+        provider: 'claude',
+        fileId: 'file_1',
+        title: `session ${index}`,
+        cwd: '/Users/me/dev/example',
+        startedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messageCount: 1,
+        metadata: {},
+      })
+      upsertTranscriptChunks(db, [
+        {
+          id: `chunk_${index}`,
+          sessionId: `session_${index}`,
+          provider: 'claude',
+          sequence: 0,
+          tokenEstimate: 20,
+          textHash: `hash_${index}`,
+          redactedText: '[user] Example work.',
+          redactionCount: 0,
+          auditStatus: 'pending',
+          metadata: {},
+        },
+      ])
+    }
+    let active = 0
+    let maxActive = 0
+    const model: TranscriptAuditModel = {
+      async complete() {
+        active += 1
+        maxActive = Math.max(maxActive, active)
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        active -= 1
+        return RESPONSE
+      },
+    }
+    const result = await summarizeSessions({
+      model,
+      days: 365,
+      concurrency: 3,
+      database: db,
+      now: Date.now(),
+    })
+    assert.equal(result.summarized, 6)
+    assert.equal(result.failed, 0)
+    assert.ok(maxActive >= 2, `expected overlap, saw maxActive=${maxActive}`)
+    assert.ok(maxActive <= 3, `expected cap of 3, saw maxActive=${maxActive}`)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

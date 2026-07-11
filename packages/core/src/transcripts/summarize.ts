@@ -24,6 +24,7 @@ export interface SummarizeSessionsOptions {
   force?: boolean
   now?: number
   maxPromptTokens?: number
+  concurrency?: number
   database?: Database.Database
   onProgress?: (event: SummarizeProgressEvent) => void
 }
@@ -68,8 +69,13 @@ export async function summarizeSessions(
   let failed = 0
   let considered = 0
 
+  type PendingSession = {
+    session: (typeof sessions)[number]
+    chunks: ReturnType<typeof listChunksForSession>
+  }
+  const pending: PendingSession[] = []
   for (const session of sessions) {
-    if (summarized >= limit) break
+    if (pending.length >= limit) break
     considered += 1
     const progress = {
       sessionId: session.id,
@@ -91,24 +97,50 @@ export async function summarizeSessions(
       })
       continue
     }
-    options.onProgress?.({ ...progress, status: 'started' })
-    try {
-      const prompt = summarizePrompt(session, chunks, maxPromptTokens)
-      const output = await options.model.complete(prompt)
-      const summary = summaryFromResponse(session, chunks.length, output)
-      upsertSessionSummary(database, summary)
-      summaries.push(summary)
-      summarized += 1
-      options.onProgress?.({ ...progress, status: 'summarized' })
-    } catch (error) {
-      failed += 1
-      options.onProgress?.({
-        ...progress,
-        status: 'failed',
-        reason: error instanceof Error ? error.message : String(error),
-      })
+    pending.push({ session, chunks })
+  }
+
+  // Model calls run through a bounded worker pool. Each summary is written
+  // the moment its call completes, so a killed run still resumes cleanly.
+  const concurrency = Math.max(1, Math.min(options.concurrency ?? 4, 8))
+  let cursor = 0
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const index = cursor
+      cursor += 1
+      if (index >= pending.length) return
+      const entry = pending[index]
+      if (!entry) return
+      const { session, chunks } = entry
+      const progress = {
+        sessionId: session.id,
+        index: index + 1,
+        total: pending.length,
+      }
+      options.onProgress?.({ ...progress, status: 'started' })
+      try {
+        const prompt = summarizePrompt(session, chunks, maxPromptTokens)
+        const output = await options.model.complete(prompt)
+        const summary = summaryFromResponse(session, chunks.length, output)
+        upsertSessionSummary(database, summary)
+        summaries.push(summary)
+        summarized += 1
+        options.onProgress?.({ ...progress, status: 'summarized' })
+      } catch (error) {
+        failed += 1
+        options.onProgress?.({
+          ...progress,
+          status: 'failed',
+          reason: error instanceof Error ? error.message : String(error),
+        })
+      }
     }
   }
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, pending.length) }, () =>
+      worker(),
+    ),
+  )
 
   return {
     sessionsConsidered: considered,

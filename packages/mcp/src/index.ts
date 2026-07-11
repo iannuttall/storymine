@@ -76,14 +76,16 @@ export function createServer(): McpServer {
       provider: z.enum(['claude', 'codex']).optional(),
       limit: z.number().int().min(1).max(1000).default(50),
       command: z.string().default(DEFAULT_SUMMARIZE_COMMAND),
+      concurrency: z.number().int().min(1).max(8).default(4),
       force: z.boolean().default(false),
     },
-    async ({ days, project, provider, limit, command, force }) =>
+    async ({ days, project, provider, limit, command, concurrency, force }) =>
       jsonResult(
         await summarizeSessions({
           days,
           limit,
           force,
+          concurrency,
           ...(project ? { project } : {}),
           ...(provider ? { provider } : {}),
           model: createCommandAuditModel(command, { timeoutMs: 180_000 }),

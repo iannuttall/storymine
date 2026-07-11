@@ -719,6 +719,11 @@ export const meCommand = defineCommand({
           default: '180',
           description: 'Per-session model timeout in seconds',
         },
+        concurrency: {
+          type: 'string',
+          default: '4',
+          description: 'Model calls to run in parallel, 1-8',
+        },
         force: {
           type: 'boolean',
           default: false,
@@ -750,6 +755,7 @@ export const meCommand = defineCommand({
           ...(provider ? { provider } : {}),
           ...(project ? { project } : {}),
           force: Boolean(args.force),
+          concurrency: numberArg(args.concurrency, 4, { min: 1, max: 8 }),
           model: createCommandAuditModel(command, {
             timeoutMs:
               numberArg(args.timeoutSeconds, 180, { min: 5, max: 1800 }) * 1000,
