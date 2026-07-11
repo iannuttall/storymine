@@ -11,12 +11,12 @@ import {
 } from '@research/core'
 import { z } from 'zod'
 
-// Bulk summarization runs on the cheaper terra model; deep passes get xhigh
-// reasoning. Never default to the sol model.
+// Bulk summarization runs on cheap luna; deep passes get terra at high.
+// Never default to the sol model - it rinses tokens.
 const DEFAULT_SUMMARIZE_COMMAND =
-  'codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --ephemeral -'
+  'codex exec -m gpt-5.6-luna -c model_reasoning_effort=ultra --ephemeral -'
 const DEFAULT_DEEP_COMMAND =
-  'codex exec -m gpt-5.6-terra -c model_reasoning_effort=xhigh --ephemeral -'
+  'codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --ephemeral -'
 
 export function createServer(): McpServer {
   const server = new McpServer(

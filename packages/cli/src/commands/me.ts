@@ -21,12 +21,12 @@ import { defineCommand } from 'citty'
 import { jsonFlag, numberArg, stringArg } from '../args.js'
 import { printJson, printTable } from '../utils.js'
 
-// Bulk summarization runs on the cheaper terra model; deep passes (audit,
-// story mining) get xhigh reasoning. Never default to the sol model.
+// Bulk summarization runs on cheap luna; deep passes (audit, story mining)
+// get terra at high. Never default to the sol model - it rinses tokens.
 const DEFAULT_SUMMARIZE_COMMAND =
-  'codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --ephemeral -'
+  'codex exec -m gpt-5.6-luna -c model_reasoning_effort=ultra --ephemeral -'
 const DEFAULT_DEEP_COMMAND =
-  'codex exec -m gpt-5.6-terra -c model_reasoning_effort=xhigh --ephemeral -'
+  'codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --ephemeral -'
 
 export const meCommand = defineCommand({
   meta: {
