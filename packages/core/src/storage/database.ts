@@ -583,6 +583,21 @@ export function markTranscriptFileIndexed(
     .run({ id, indexedAt: nowIso() })
 }
 
+export function markTranscriptFileFailed(
+  database: Database.Database,
+  id: string,
+  error: string,
+): void {
+  database
+    .prepare(
+      `UPDATE transcript_files
+       SET status = 'failed',
+           error = @error
+       WHERE id = @id`,
+    )
+    .run({ id, error })
+}
+
 export function listTranscriptChunks(
   database: Database.Database,
   options: { status?: string; limit?: number } = {},
