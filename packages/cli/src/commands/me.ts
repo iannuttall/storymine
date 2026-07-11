@@ -5,11 +5,15 @@ import {
   createCommandAuditModel,
   getTranscriptChunkView,
   indexTranscriptFiles,
+  listStoredSessionSummaries,
+  mineStories,
   processTranscriptFiles,
   readTranscriptChunks,
   renderTranscriptChunkMarkdown,
   resetTranscriptAuditData,
   searchTranscriptChunks,
+  storeArtifactSignals,
+  summarizeSessions,
   type TranscriptChunkView,
   writeTranscriptSearchCorpus,
 } from '@research/core'
@@ -627,6 +631,289 @@ export const meCommand = defineCommand({
             )
           },
         }),
+      },
+    }),
+    artifacts: defineCommand({
+      meta: {
+        name: 'artifacts',
+        description: 'Scan local work products (git, skills, sandbox projects)',
+      },
+      args: {
+        days: {
+          type: 'string',
+          default: '7',
+          description: 'Number of days to scan, 1-365',
+        },
+        root: {
+          type: 'string',
+          description: 'Override the dev root to scan (default ~/dev)',
+        },
+        json: {
+          type: 'boolean',
+          default: false,
+          description: 'Print structured JSON',
+        },
+      },
+      run: ({ args }) => {
+        const root = stringArg(args.root)
+        const result = storeArtifactSignals({
+          days: numberArg(args.days, 7, { min: 1, max: 365 }),
+          ...(root ? { root } : {}),
+        })
+        if (jsonFlag(args)) {
+          printJson(result)
+          return
+        }
+        printTable(
+          ['Kind', 'Name', 'Path'],
+          result.artifacts.map((artifact) => [
+            artifact.kind,
+            artifact.name,
+            artifact.path,
+          ]),
+        )
+      },
+    }),
+    summarize: defineCommand({
+      meta: {
+        name: 'summarize',
+        description: 'Summarize parsed sessions with one cheap model call each',
+      },
+      args: {
+        days: {
+          type: 'string',
+          default: '7',
+          description: 'Only summarize sessions updated in the last N days',
+        },
+        project: {
+          type: 'string',
+          description: 'Only summarize sessions whose title/cwd/path matches',
+        },
+        provider: {
+          type: 'string',
+          default: 'all',
+          description: 'Provider to summarize: all, claude, or codex',
+        },
+        limit: {
+          type: 'string',
+          default: '50',
+          description: 'Maximum sessions to summarize this run',
+        },
+        command: {
+          type: 'string',
+          default: DEFAULT_AUDIT_COMMAND,
+          description: 'Model command that reads a prompt from stdin',
+        },
+        maxTokens: {
+          type: 'string',
+          default: '10000',
+          description: 'Maximum prompt tokens of transcript per session',
+        },
+        timeoutSeconds: {
+          type: 'string',
+          default: '180',
+          description: 'Per-session model timeout in seconds',
+        },
+        force: {
+          type: 'boolean',
+          default: false,
+          description: 'Re-summarize sessions that already have a summary',
+        },
+        json: {
+          type: 'boolean',
+          default: false,
+          description: 'Print structured JSON',
+        },
+        progress: {
+          type: 'boolean',
+          default: false,
+          description: 'Print per-session progress to stderr',
+        },
+      },
+      run: async ({ args }) => {
+        const command = stringArg(args.command) ?? DEFAULT_AUDIT_COMMAND
+        const provider = transcriptProviderArg(args.provider)
+        const project = stringArg(args.project)
+        const shouldProgress = Boolean(args.progress) || !jsonFlag(args)
+        const result = await summarizeSessions({
+          days: numberArg(args.days, 7, { min: 1, max: 365 }),
+          limit: numberArg(args.limit, 50, { min: 1, max: 1000 }),
+          maxPromptTokens: numberArg(args.maxTokens, 10_000, {
+            min: 1000,
+            max: 40_000,
+          }),
+          ...(provider ? { provider } : {}),
+          ...(project ? { project } : {}),
+          force: Boolean(args.force),
+          model: createCommandAuditModel(command, {
+            timeoutMs:
+              numberArg(args.timeoutSeconds, 180, { min: 5, max: 1800 }) * 1000,
+          }),
+          ...(shouldProgress
+            ? {
+                onProgress: (event) => {
+                  process.stderr.write(
+                    `Summarize ${event.index}/${event.total} ${event.sessionId}: ${event.status}${
+                      event.reason ? ` (${event.reason})` : ''
+                    }\n`,
+                  )
+                },
+              }
+            : {}),
+        })
+        if (jsonFlag(args)) {
+          printJson(result)
+          return
+        }
+        printTable(
+          ['Considered', 'Summarized', 'Skipped', 'Failed'],
+          [
+            [
+              String(result.sessionsConsidered),
+              String(result.summarized),
+              String(result.skipped),
+              String(result.failed),
+            ],
+          ],
+        )
+      },
+    }),
+    summaries: defineCommand({
+      meta: {
+        name: 'summaries',
+        description: 'List stored session summaries',
+      },
+      args: {
+        days: {
+          type: 'string',
+          description: 'Only list summaries created in the last N days',
+        },
+        limit: {
+          type: 'string',
+          default: '50',
+          description: 'Maximum summaries to list',
+        },
+        json: {
+          type: 'boolean',
+          default: false,
+          description: 'Print structured JSON',
+        },
+      },
+      run: ({ args }) => {
+        const days = stringArg(args.days)
+        const summaries = listStoredSessionSummaries({
+          ...(days
+            ? { days: numberArg(args.days, 7, { min: 1, max: 365 }) }
+            : {}),
+          limit: numberArg(args.limit, 50, { min: 1, max: 1000 }),
+        })
+        if (jsonFlag(args)) {
+          printJson({ summaries })
+          return
+        }
+        printTable(
+          ['Session', 'Project', 'Summary'],
+          summaries.map((summary) => [
+            summary.sessionId,
+            summary.cwd ?? '',
+            summary.summary.replace(/\s+/g, ' ').slice(0, 80),
+          ]),
+        )
+      },
+    }),
+    stories: defineCommand({
+      meta: {
+        name: 'stories',
+        description:
+          'Rank summarized sessions and deep-audit the top for stories',
+      },
+      args: {
+        days: {
+          type: 'string',
+          default: '7',
+          description: 'Story window in days, 1-365',
+        },
+        limit: {
+          type: 'string',
+          default: '10',
+          description: 'Maximum top sessions to deep-audit for stories',
+        },
+        provider: {
+          type: 'string',
+          default: 'all',
+          description: 'Provider to mine: all, claude, or codex',
+        },
+        command: {
+          type: 'string',
+          default: DEFAULT_AUDIT_COMMAND,
+          description: 'Model command that reads a prompt from stdin',
+        },
+        maxTokens: {
+          type: 'string',
+          default: '12000',
+          description: 'Maximum prompt tokens of transcript per session',
+        },
+        timeoutSeconds: {
+          type: 'string',
+          default: '240',
+          description: 'Per-session model timeout in seconds',
+        },
+        json: {
+          type: 'boolean',
+          default: false,
+          description: 'Print structured JSON',
+        },
+        progress: {
+          type: 'boolean',
+          default: false,
+          description: 'Print per-session progress to stderr',
+        },
+      },
+      run: async ({ args }) => {
+        const command = stringArg(args.command) ?? DEFAULT_AUDIT_COMMAND
+        const provider = transcriptProviderArg(args.provider)
+        const shouldProgress = Boolean(args.progress) || !jsonFlag(args)
+        const result = await mineStories({
+          days: numberArg(args.days, 7, { min: 1, max: 365 }),
+          limit: numberArg(args.limit, 10, { min: 1, max: 50 }),
+          maxPromptTokens: numberArg(args.maxTokens, 12_000, {
+            min: 1000,
+            max: 40_000,
+          }),
+          ...(provider ? { provider } : {}),
+          model: createCommandAuditModel(command, {
+            timeoutMs:
+              numberArg(args.timeoutSeconds, 240, { min: 5, max: 1800 }) * 1000,
+          }),
+          ...(shouldProgress
+            ? {
+                onProgress: (event) => {
+                  process.stderr.write(
+                    `Story ${event.index}/${event.total} ${event.sessionId}: ${event.status}${
+                      event.reason ? ` (${event.reason})` : ''
+                    }\n`,
+                  )
+                },
+              }
+            : {}),
+        })
+        if (jsonFlag(args)) {
+          printJson(result)
+          return
+        }
+        printTable(
+          ['Session', 'Score', 'Story', 'Reasons'],
+          result.ranked.map((entry) => [
+            entry.summary.sessionId,
+            entry.score.toFixed(2),
+            result.findings.some(
+              (finding) => finding.sessionId === entry.summary.sessionId,
+            )
+              ? 'yes'
+              : 'no',
+            entry.reasons.join('; '),
+          ]),
+        )
       },
     }),
   },

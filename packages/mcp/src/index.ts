@@ -1,11 +1,17 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
+  createCommandAuditModel,
   listStoredCandidates,
+  mineStories,
   promoteTranscriptFindings,
   renderCandidatesMarkdown,
+  storeArtifactSignals,
+  summarizeSessions,
 } from '@research/core'
 import { z } from 'zod'
+
+const DEFAULT_MODEL_COMMAND = 'codex exec --ephemeral -'
 
 export function createServer(): McpServer {
   const server = new McpServer(
@@ -45,6 +51,59 @@ export function createServer(): McpServer {
     },
     async ({ minConfidence, limit }) =>
       jsonResult(promoteTranscriptFindings({ minConfidence, limit })),
+  )
+
+  server.tool(
+    'research_scan_artifacts',
+    'Scan local work products (git activity, skills, sandbox projects) as artifact signals. Deterministic, no model calls.',
+    {
+      days: z.number().int().min(1).max(365).default(7),
+    },
+    async ({ days }) => jsonResult(storeArtifactSignals({ days })),
+  )
+
+  server.tool(
+    'research_summarize_sessions',
+    'Summarize parsed transcript sessions with one cheap model call each. Idempotent and resumable.',
+    {
+      days: z.number().int().min(1).max(365).default(7),
+      project: z.string().optional(),
+      provider: z.enum(['claude', 'codex']).optional(),
+      limit: z.number().int().min(1).max(1000).default(50),
+      command: z.string().default(DEFAULT_MODEL_COMMAND),
+      force: z.boolean().default(false),
+    },
+    async ({ days, project, provider, limit, command, force }) =>
+      jsonResult(
+        await summarizeSessions({
+          days,
+          limit,
+          force,
+          ...(project ? { project } : {}),
+          ...(provider ? { provider } : {}),
+          model: createCommandAuditModel(command, { timeoutMs: 180_000 }),
+        }),
+      ),
+  )
+
+  server.tool(
+    'research_mine_stories',
+    'Rank summarized sessions by story potential and deep-audit the top ones into story findings.',
+    {
+      days: z.number().int().min(1).max(365).default(7),
+      limit: z.number().int().min(1).max(50).default(10),
+      provider: z.enum(['claude', 'codex']).optional(),
+      command: z.string().default(DEFAULT_MODEL_COMMAND),
+    },
+    async ({ days, limit, provider, command }) =>
+      jsonResult(
+        await mineStories({
+          days,
+          limit,
+          ...(provider ? { provider } : {}),
+          model: createCommandAuditModel(command, { timeoutMs: 240_000 }),
+        }),
+      ),
   )
 
   return server
