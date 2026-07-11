@@ -182,13 +182,19 @@ export function summarizePrompt(
     'what actually worked, any tool/skill/script that was created, and any opinions or complaints the',
     'human repeated (for example frustration with a specific model, tool, or workflow).',
     '',
+    'Pay special attention to FRICTION: moments where the human interrupted or aborted a turn,',
+    'said no/stop/wrong, reversed the AI, or where the AI did significant work that was never asked',
+    'for (unrequested refactors, scope creep). Friction moments are the most valuable part of the',
+    'session for later mining. A feature list that omits them is a failed summary.',
+    '',
     'Return JSON only with this shape:',
-    '{"summary":"5-10 line plain summary","built":"what was being built","problems":"main problems hit","failedApproaches":["approach that did not work"],"whatWorked":"what actually solved it","toolsCreated":["tool or skill or script created"],"opinions":["repeated complaint or strong opinion, quoted plainly"]}',
+    '{"summary":"5-10 line plain summary","built":"what was being built","problems":"main problems hit","failedApproaches":["approach that did not work"],"whatWorked":"what actually solved it","toolsCreated":["tool or skill or script created"],"opinions":["repeated complaint or strong opinion, quoted plainly"],"friction":["interruption, correction, or unrequested work, with what triggered it"]}',
     '',
     'Rules:',
     '- Keep summary concrete and specific. Name real files, tools, commands, and error types when the transcript shows them.',
-    '- failedApproaches, toolsCreated, and opinions are arrays. Use an empty array if there is nothing real to add.',
+    '- failedApproaches, toolsCreated, opinions, and friction are arrays. Use an empty array if there is nothing real to add.',
     '- opinions should capture repeated frustrations or preferences (for example "GPT-5.6 keeps overengineering"), not generic advice.',
+    '- friction entries should say what the AI was doing and how the human reacted, close to verbatim.',
     '- Do not include secrets, credentials, or long verbatim code.',
     '- If the session is thin or off-topic, still return valid JSON with a short summary and empty arrays.',
     '',
@@ -202,6 +208,18 @@ export function summarizePrompt(
   ].join('\n')
 }
 
+// User pushback markers. Chunks matching these must survive truncation:
+// the middle of a long session is exactly where "no no no, stop" lives.
+const FRICTION_PATTERN =
+  /<turn_aborted>|\bno no\b|\bstop\b|\bdon'?t\b|\bdo not\b|\bwrong\b|\brevert\b|\bundo\b|why (?:did|are|would) you|too (?:much|far)|over the top|overboard|overengineer|didn'?t ask|unprompted/i
+
+function isFrictionChunk(chunk: TranscriptChunk): boolean {
+  return (
+    chunk.redactedText.includes('[user]') &&
+    FRICTION_PATTERN.test(chunk.redactedText)
+  )
+}
+
 function boundedChunkText(
   chunks: TranscriptChunk[],
   maxPromptTokens: number,
@@ -210,32 +228,56 @@ function boundedChunkText(
   if (total <= maxPromptTokens) {
     return chunks.map((chunk) => chunk.redactedText).join('\n\n')
   }
-  const headBudget = Math.floor(maxPromptTokens * 0.6)
-  const tailBudget = maxPromptTokens - headBudget
-  const head: string[] = []
+
+  const selected = new Set<number>()
+  const frictionBudget = Math.floor(maxPromptTokens * 0.3)
+  let frictionTokens = 0
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index]
+    if (!chunk || !isFrictionChunk(chunk)) continue
+    if (
+      frictionTokens + chunk.tokenEstimate > frictionBudget &&
+      frictionTokens > 0
+    )
+      break
+    selected.add(index)
+    frictionTokens += chunk.tokenEstimate
+  }
+
+  const remaining = maxPromptTokens - frictionTokens
+  const headBudget = Math.floor(remaining * 0.6)
+  const tailBudget = remaining - headBudget
   let headTokens = 0
-  let headIndex = 0
-  for (; headIndex < chunks.length; headIndex += 1) {
-    const chunk = chunks[headIndex]
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index]
     if (!chunk) break
-    if (headTokens + chunk.tokenEstimate > headBudget && head.length > 0) break
-    head.push(chunk.redactedText)
+    if (selected.has(index)) continue
+    if (headTokens + chunk.tokenEstimate > headBudget && headTokens > 0) break
+    selected.add(index)
     headTokens += chunk.tokenEstimate
   }
-  const tail: string[] = []
   let tailTokens = 0
-  for (let index = chunks.length - 1; index >= headIndex; index -= 1) {
+  for (let index = chunks.length - 1; index >= 0; index -= 1) {
     const chunk = chunks[index]
-    if (!chunk) continue
-    if (tailTokens + chunk.tokenEstimate > tailBudget && tail.length > 0) break
-    tail.unshift(chunk.redactedText)
+    if (!chunk || selected.has(index)) continue
+    if (tailTokens + chunk.tokenEstimate > tailBudget && tailTokens > 0) break
+    selected.add(index)
     tailTokens += chunk.tokenEstimate
   }
-  return [
-    ...head,
-    '\n[... middle of session omitted for length ...]\n',
-    ...tail,
-  ].join('\n\n')
+
+  const ordered = Array.from(selected).sort((a, b) => a - b)
+  const parts: string[] = []
+  let previous = -1
+  for (const index of ordered) {
+    const chunk = chunks[index]
+    if (!chunk) continue
+    if (previous !== -1 && index > previous + 1) {
+      parts.push('[... part of session omitted for length ...]')
+    }
+    parts.push(chunk.redactedText)
+    previous = index
+  }
+  return parts.join('\n\n')
 }
 
 function summaryFromResponse(
@@ -266,7 +308,7 @@ function summaryFromResponse(
     model: null,
     chunkCount,
     createdAt: nowIso(),
-    metadata: {},
+    metadata: { friction: asStringArray(object.friction) },
   }
 }
 

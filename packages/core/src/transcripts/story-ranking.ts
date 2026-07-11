@@ -126,6 +126,12 @@ export function rankStorySessions(
       reasons.push('repeated opinion across sessions')
     }
 
+    const friction = frictionEntries(summary)
+    if (friction.length > 0) {
+      score += 1.5 + Math.min(friction.length - 1, 2) * 0.5
+      reasons.push('human pushback / unrequested AI work')
+    }
+
     score += Math.min(summary.chunkCount, 20) * 0.02
 
     return {
@@ -166,6 +172,12 @@ function describeMatchedArtifacts(matched: Artifact[]): string {
   return [...counts.entries()]
     .map(([kind, count]) => (count > 1 ? `${kind} x${count}` : kind))
     .join(', ')
+}
+
+export function frictionEntries(summary: SessionSummary): string[] {
+  const value = summary.metadata?.friction
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === 'string')
 }
 
 export function artifactMatchesSession(

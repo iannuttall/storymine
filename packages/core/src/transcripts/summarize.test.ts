@@ -232,3 +232,46 @@ test('summarizeSessions overlaps model calls up to the concurrency limit', async
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('summarizePrompt keeps friction chunks when truncating long sessions', async () => {
+  const { summarizePrompt } = await import('./summarize.js')
+  const session = {
+    id: 'session_long',
+    provider: 'codex',
+    cwd: '/Users/me/dev/cli/seo',
+    title: 'long session',
+  }
+  const chunk = (id: number, text: string, tokens = 2000) => ({
+    id: `chunk_${id}`,
+    sessionId: 'session_long',
+    provider: 'codex' as const,
+    sequence: id,
+    tokenEstimate: tokens,
+    textHash: `h_${id}`,
+    redactedText: text,
+    redactionCount: 0,
+    auditStatus: 'pending' as const,
+    metadata: {},
+  })
+  const chunks = [
+    chunk(0, '[user] build the seo report command'),
+    chunk(1, '[assistant] working on reports'),
+    chunk(
+      2,
+      '[assistant] I also refactored the primitives bucket into four files',
+    ),
+    chunk(
+      3,
+      '[user] no no no. we should not be hard coding ANYTHING for specific sites',
+    ),
+    chunk(4, '[assistant] reverting the hardcoded rules'),
+    chunk(5, '[assistant] reports now pass checks'),
+    chunk(6, '[user] great, ship it'),
+  ]
+  const prompt = summarizePrompt(session, chunks, 6000)
+  assert.ok(
+    prompt.includes('no no no. we should not be hard coding'),
+    'friction chunk in the middle must survive truncation',
+  )
+  assert.ok(prompt.includes('omitted for length'))
+})
