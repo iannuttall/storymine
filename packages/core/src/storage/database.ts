@@ -583,6 +583,20 @@ export function markTranscriptFileIndexed(
     .run({ id, indexedAt: nowIso() })
 }
 
+export function hasStoryFinding(
+  database: Database.Database,
+  sessionId: string,
+): boolean {
+  const row = database
+    .prepare(
+      `SELECT 1 FROM transcript_findings
+       WHERE session_id = @sessionId AND category = 'story'
+       LIMIT 1`,
+    )
+    .get({ sessionId })
+  return row !== undefined
+}
+
 export function markTranscriptFileFailed(
   database: Database.Database,
   id: string,

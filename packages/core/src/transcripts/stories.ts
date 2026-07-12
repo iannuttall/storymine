@@ -4,6 +4,7 @@ import { scanArtifacts } from '../artifacts/scan.js'
 import type { TranscriptFinding, TranscriptProvider } from '../schemas.js'
 import {
   getDb,
+  hasStoryFinding,
   insertTranscriptFindings,
   listChunksForSession,
   listSessionSummaries,
@@ -69,7 +70,22 @@ export async function mineStories(
   )
   const artifacts = scanArtifacts({ days, now }).artifacts
   const ranked = rankStorySessions(summaries, artifacts)
-  const top = ranked.filter((entry) => entry.score > 0).slice(0, limit)
+  // One project can dominate the ranking (many sessions, rich artifacts).
+  // Cap sessions per project and skip sessions already mined so the deep
+  // pass spends its budget on distinct stories.
+  const perProjectCap = 2
+  const perProject = new Map<string, number>()
+  const top: RankedStorySession[] = []
+  for (const entry of ranked) {
+    if (top.length >= limit) break
+    if (entry.score <= 0) continue
+    if (hasStoryFinding(database, entry.summary.sessionId)) continue
+    const projectKey = entry.summary.cwd ?? 'unknown'
+    const used = perProject.get(projectKey) ?? 0
+    if (used >= perProjectCap) continue
+    perProject.set(projectKey, used + 1)
+    top.push(entry)
+  }
 
   const findings: TranscriptFinding[] = []
   const rejections: StoryRejection[] = []
