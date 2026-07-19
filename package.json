@@ -5,6 +5,14 @@
   "type": "module",
   "license": "Apache-2.0",
   "author": "Ian Nuttall",
+  "homepage": "https://github.com/iannuttall/storymine#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iannuttall/storymine.git"
+  },
+  "bugs": {
+    "url": "https://github.com/iannuttall/storymine/issues"
+  },
   "keywords": [
     "ai",
     "claude",

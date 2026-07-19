@@ -14,6 +14,10 @@ test('the public package exposes one API, CLI, and MCP surface', () => {
   assert.equal(packageJson.exports['.'].import, './dist/index.js')
   assert.equal(packageJson.exports['./mcp'].import, './dist/mcp.js')
   assert.equal(packageJson.license, 'Apache-2.0')
+  assert.equal(
+    packageJson.repository.url,
+    'git+https://github.com/iannuttall/storymine.git',
+  )
 })
 
 test('the public library and MCP entry points load', async () => {

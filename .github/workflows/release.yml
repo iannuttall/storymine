@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.1.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - name: Use an npm CLI with trusted publishing support
+        run: npm install --global npm@11.10.0
+      - name: Check package version
+        id: release
+        shell: bash
+        run: |
+          version="$(node --print "require('./package.json').version")"
+          if npm view "storymine@${version}" version >/dev/null 2>&1; then
+            published="true"
+          else
+            published="false"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "published=${published}" >> "$GITHUB_OUTPUT"
+      - name: Check tag matches package version
+        if: github.event_name == 'push'
+        env:
+          EXPECTED_TAG: v${{ steps.release.outputs.version }}
+        run: test "$GITHUB_REF_NAME" = "$EXPECTED_TAG"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm test:package-install
+      - name: Publish to npm
+        if: steps.release.outputs.published == 'false'
+        run: npm publish --access public
+      - name: Report existing release
+        if: steps.release.outputs.published == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: echo "storymine@$RELEASE_VERSION is already published; nothing to release."
