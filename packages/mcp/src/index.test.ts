@@ -6,7 +6,7 @@ const { test } = createRequire(import.meta.url)(
   'node:test',
 ) as typeof import('node:test')
 
-test('createServer constructs the research MCP server', () => {
+test('createServer constructs the Storymine MCP server', () => {
   const server = createServer()
   assert.ok(server)
 })

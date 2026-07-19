@@ -1,12 +1,13 @@
 {
   "name": "@research/cli",
+  "private": true,
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "research": "./dist/index.js"
+    "storymine": "./dist/index.js"
   },
   "files": [
     "dist"

@@ -35,3 +35,12 @@ export function floatArg(
 export function stringArg(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
+
+export function commaListArg(value: unknown): string[] {
+  const raw = stringArg(value)
+  if (!raw) return []
+  return raw
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}

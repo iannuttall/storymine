@@ -9,7 +9,7 @@ export const mcpCommand = defineCommand({
     serve: defineCommand({
       meta: {
         name: 'serve',
-        description: 'Run the research MCP server',
+        description: 'Run the Storymine MCP server',
       },
       args: {
         test: {

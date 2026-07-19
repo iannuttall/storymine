@@ -12,7 +12,7 @@ import { formatBytes, printJson, printKeyValue, printTable } from '../utils.js'
 export const privacyCommand = defineCommand({
   meta: {
     name: 'privacy',
-    description: 'Show local research storage paths',
+    description: 'Show local Storymine storage and model boundaries',
   },
   args: {
     json: {
@@ -25,7 +25,12 @@ export const privacyCommand = defineCommand({
     const snapshot = getPrivacySnapshot()
     const stats = getStorageStats()
     if (jsonFlag(args)) {
-      printJson({ snapshot, stats })
+      printJson({
+        snapshot,
+        stats,
+        modelBoundary:
+          'Redacted excerpts are passed to the model command used by storymine scan.',
+      })
       return
     }
     printKeyValue(
@@ -38,13 +43,16 @@ export const privacyCommand = defineCommand({
     printKeyValue(
       Object.entries(stats.counts).map(([key, value]) => [key, String(value)]),
     )
+    process.stdout.write(
+      '\nRedacted excerpts are passed to the model command used by `storymine scan`.\n',
+    )
   },
 })
 
 export const doctorCommand = defineCommand({
   meta: {
     name: 'doctor',
-    description: 'Check local source availability',
+    description: 'Check local chat sources, model commands, and storage',
   },
   args: {
     json: {
@@ -73,7 +81,7 @@ export const doctorCommand = defineCommand({
 export const resetCommand = defineCommand({
   meta: {
     name: 'reset',
-    description: 'Delete local research config, cache, and logs',
+    description: 'Delete local Storymine config, cache, and logs',
   },
   args: {
     yes: {

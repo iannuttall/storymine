@@ -18,15 +18,10 @@ import {
   writeTranscriptSearchCorpus,
 } from '@research/core'
 import { defineCommand } from 'citty'
-import { jsonFlag, numberArg, stringArg } from '../args.js'
+import { commaListArg, jsonFlag, numberArg, stringArg } from '../args.js'
 import { printJson, printTable } from '../utils.js'
 
-// Bulk summarization runs on cheap luna; deep passes (audit, story mining)
-// get terra at high. Never default to the sol model - it rinses tokens.
-const DEFAULT_SUMMARIZE_COMMAND =
-  'codex exec -m gpt-5.6-luna -c model_reasoning_effort=ultra --ephemeral -'
-const DEFAULT_DEEP_COMMAND =
-  'codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --ephemeral -'
+const DEFAULT_MODEL_COMMAND = 'codex exec --ephemeral -'
 
 export const meCommand = defineCommand({
   meta: {
@@ -281,7 +276,7 @@ export const meCommand = defineCommand({
           args: {
             command: {
               type: 'string',
-              default: DEFAULT_DEEP_COMMAND,
+              default: DEFAULT_MODEL_COMMAND,
               description:
                 'Model command that reads prompt from stdin. Defaults to ephemeral Codex exec',
             },
@@ -330,7 +325,7 @@ export const meCommand = defineCommand({
             },
           },
           run: async ({ args }) => {
-            const command = stringArg(args.command) ?? DEFAULT_DEEP_COMMAND
+            const command = stringArg(args.command) ?? DEFAULT_MODEL_COMMAND
             const shouldProgress = Boolean(args.progress) || !jsonFlag(args)
             const provider = transcriptProviderArg(args.provider)
             const query = stringArg(args.query)
@@ -641,7 +636,7 @@ export const meCommand = defineCommand({
     artifacts: defineCommand({
       meta: {
         name: 'artifacts',
-        description: 'Scan local work products (git, skills, sandbox projects)',
+        description: 'Scan a local root for recent Git repos and skill files',
       },
       args: {
         days: {
@@ -651,7 +646,7 @@ export const meCommand = defineCommand({
         },
         root: {
           type: 'string',
-          description: 'Override the dev root to scan (default ~/dev)',
+          description: 'Root to scan (default current directory)',
         },
         json: {
           type: 'boolean',
@@ -706,7 +701,7 @@ export const meCommand = defineCommand({
         },
         command: {
           type: 'string',
-          default: DEFAULT_SUMMARIZE_COMMAND,
+          default: DEFAULT_MODEL_COMMAND,
           description: 'Model command that reads a prompt from stdin',
         },
         maxTokens: {
@@ -741,7 +736,7 @@ export const meCommand = defineCommand({
         },
       },
       run: async ({ args }) => {
-        const command = stringArg(args.command) ?? DEFAULT_SUMMARIZE_COMMAND
+        const command = stringArg(args.command) ?? DEFAULT_MODEL_COMMAND
         const provider = transcriptProviderArg(args.provider)
         const project = stringArg(args.project)
         const shouldProgress = Boolean(args.progress) || !jsonFlag(args)
@@ -854,9 +849,14 @@ export const meCommand = defineCommand({
           default: 'all',
           description: 'Provider to mine: all, claude, or codex',
         },
+        project: {
+          type: 'string',
+          description:
+            'Only mine sessions matching project path, cwd, or title',
+        },
         command: {
           type: 'string',
-          default: DEFAULT_DEEP_COMMAND,
+          default: DEFAULT_MODEL_COMMAND,
           description: 'Model command that reads a prompt from stdin',
         },
         maxTokens: {
@@ -881,8 +881,9 @@ export const meCommand = defineCommand({
         },
       },
       run: async ({ args }) => {
-        const command = stringArg(args.command) ?? DEFAULT_DEEP_COMMAND
+        const command = stringArg(args.command) ?? DEFAULT_MODEL_COMMAND
         const provider = transcriptProviderArg(args.provider)
+        const project = stringArg(args.project)
         const shouldProgress = Boolean(args.progress) || !jsonFlag(args)
         const result = await mineStories({
           days: numberArg(args.days, 7, { min: 1, max: 365 }),
@@ -892,6 +893,7 @@ export const meCommand = defineCommand({
             max: 40_000,
           }),
           ...(provider ? { provider } : {}),
+          ...(project ? { project } : {}),
           model: createCommandAuditModel(command, {
             timeoutMs:
               numberArg(args.timeoutSeconds, 240, { min: 5, max: 1800 }) * 1000,
@@ -948,15 +950,6 @@ function transcriptStatusArg(
   const raw = stringArg(value)
   if (raw === 'pending' || raw === 'audited' || raw === 'failed') return raw
   return undefined
-}
-
-function commaListArg(value: unknown): string[] {
-  const raw = stringArg(value)
-  if (!raw) return []
-  return raw
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
 }
 
 function transcriptIndexRows(

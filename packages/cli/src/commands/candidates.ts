@@ -45,6 +45,11 @@ export const candidatesCommand = defineCommand({
           default: false,
           description: 'Rebuild candidates for already-promoted findings',
         },
+        includeUnreviewed: {
+          type: 'boolean',
+          default: false,
+          description: 'Include findings that have not been approved',
+        },
       },
       run: ({ args }) => {
         const result = promoteTranscriptFindings({
@@ -55,6 +60,7 @@ export const candidatesCommand = defineCommand({
             max: 100,
           }),
           force: Boolean(args.force),
+          includeUnreviewed: Boolean(args.includeUnreviewed),
         })
         if (jsonFlag(args)) {
           printJson(result)

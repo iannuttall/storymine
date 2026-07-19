@@ -2,115 +2,105 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   createCommandAuditModel,
-  listStoredCandidates,
-  mineStories,
-  promoteTranscriptFindings,
-  renderCandidatesMarkdown,
-  storeArtifactSignals,
-  summarizeSessions,
+  listStoryIdeas,
+  reviewTranscriptFinding,
+  runRecentWorkScan,
+  runStoryScan,
+  storyIdeaFromFinding,
 } from '@research/core'
 import { z } from 'zod'
 
-// Bulk summarization runs on cheap luna; deep passes get terra at high.
-// Never default to the sol model - it rinses tokens.
-const DEFAULT_SUMMARIZE_COMMAND =
-  'codex exec -m gpt-5.6-luna -c model_reasoning_effort=ultra --ephemeral -'
-const DEFAULT_DEEP_COMMAND =
-  'codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --ephemeral -'
+const AGENT_COMMANDS = {
+  codex: 'codex exec --ephemeral -',
+  claude: 'claude -p',
+} as const
 
 export function createServer(): McpServer {
   const server = new McpServer(
     {
-      name: 'research',
+      name: 'storymine',
       version: '0.1.0',
     },
     { capabilities: { logging: {} } },
   )
 
   server.tool(
-    'research_list_candidates',
-    'List stored research candidates as structured JSON.',
-    {
-      limit: z.number().int().min(1).max(1000).default(50),
-    },
-    async ({ limit }) =>
-      jsonResult({ candidates: listStoredCandidates({ limit }) }),
-  )
-
-  server.tool(
-    'research_export_candidates',
-    'Export stored research candidates as markdown for draft agents.',
-    {
-      limit: z.number().int().min(1).max(1000).default(50),
-    },
-    async ({ limit }) =>
-      textResult(renderCandidatesMarkdown(listStoredCandidates({ limit }))),
-  )
-
-  server.tool(
-    'research_promote_findings',
-    'Promote high-confidence transcript findings into candidates.',
-    {
-      minConfidence: z.number().min(0).max(1).default(0.7),
-      limit: z.number().int().min(1).max(500).default(25),
-    },
-    async ({ minConfidence, limit }) =>
-      jsonResult(promoteTranscriptFindings({ minConfidence, limit })),
-  )
-
-  server.tool(
-    'research_scan_artifacts',
-    'Scan local work products (git activity, skills, sandbox projects) as artifact signals. Deterministic, no model calls.',
-    {
-      days: z.number().int().min(1).max(365).default(7),
-    },
-    async ({ days }) => jsonResult(storeArtifactSignals({ days })),
-  )
-
-  server.tool(
-    'research_summarize_sessions',
-    'Summarize parsed transcript sessions with one cheap model call each. Idempotent and resumable.',
+    'storymine_scan',
+    'Scan recent local Claude and Codex chats for concrete blog ideas.',
     {
       days: z.number().int().min(1).max(365).default(7),
       project: z.string().optional(),
       provider: z.enum(['claude', 'codex']).optional(),
-      limit: z.number().int().min(1).max(1000).default(50),
-      command: z.string().default(DEFAULT_SUMMARIZE_COMMAND),
-      concurrency: z.number().int().min(1).max(8).default(4),
-      force: z.boolean().default(false),
+      topics: z.array(z.string().min(1)).max(20).optional(),
+      ideas: z.number().int().min(1).max(20).default(5),
+      agent: z.enum(['codex', 'claude']).default('codex'),
     },
-    async ({ days, project, provider, limit, command, concurrency, force }) =>
+    async ({ days, project, provider, topics, ideas, agent }) =>
       jsonResult(
-        await summarizeSessions({
+        await runStoryScan({
           days,
-          limit,
-          force,
-          concurrency,
+          ideaLimit: ideas,
           ...(project ? { project } : {}),
           ...(provider ? { provider } : {}),
-          model: createCommandAuditModel(command, { timeoutMs: 180_000 }),
+          ...(topics ? { topics } : {}),
+          model: createCommandAuditModel(AGENT_COMMANDS[agent], {
+            timeoutMs: 300_000,
+          }),
         }),
       ),
   )
 
   server.tool(
-    'research_mine_stories',
-    'Rank summarized sessions by story potential and deep-audit the top ones into story findings.',
+    'storymine_recent_work',
+    'List recent tools, projects, configured repositories, packages, and site URLs without running a model.',
     {
       days: z.number().int().min(1).max(365).default(7),
-      limit: z.number().int().min(1).max(50).default(10),
+      project: z.string().optional(),
       provider: z.enum(['claude', 'codex']).optional(),
-      command: z.string().default(DEFAULT_DEEP_COMMAND),
+      topics: z.array(z.string().min(1)).max(20).optional(),
     },
-    async ({ days, limit, provider, command }) =>
+    async ({ days, project, provider, topics }) =>
       jsonResult(
-        await mineStories({
+        runRecentWorkScan({
           days,
-          limit,
+          ...(project ? { project } : {}),
           ...(provider ? { provider } : {}),
-          model: createCommandAuditModel(command, { timeoutMs: 240_000 }),
+          ...(topics ? { topics } : {}),
         }),
       ),
+  )
+
+  server.tool(
+    'storymine_list_ideas',
+    'List mined story ideas without raw transcript content.',
+    {
+      status: z
+        .enum(['new', 'approved', 'rejected', 'needs-work', 'all'])
+        .default('new'),
+      limit: z.number().int().min(1).max(200).default(20),
+    },
+    async ({ status, limit }) =>
+      jsonResult({ ideas: listStoryIdeas({ status, limit }) }),
+  )
+
+  server.tool(
+    'storymine_review_idea',
+    'Approve, reject, or mark one story idea as needing work.',
+    {
+      id: z.string().min(1),
+      status: z.enum(['approved', 'rejected', 'needs-work']),
+      notes: z.string().optional(),
+    },
+    async ({ id, status, notes }) =>
+      jsonResult({
+        idea: storyIdeaFromFinding(
+          reviewTranscriptFinding({
+            id,
+            status,
+            ...(notes ? { notes } : {}),
+          }),
+        ),
+      }),
   )
 
   return server
@@ -120,7 +110,7 @@ export async function startMcpServer(
   options: { test?: boolean } = {},
 ): Promise<void> {
   if (options.test) {
-    process.stdout.write('research MCP server constructed successfully.\n')
+    process.stdout.write('Storymine MCP server constructed successfully.\n')
     return
   }
 
