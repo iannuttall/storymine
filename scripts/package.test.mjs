@@ -42,10 +42,13 @@ test('runtime bundles do not depend on private workspace packages', async () => 
 test('the packaged CLI is executable and reports the package version', async () => {
   const cli = await readFile('dist/cli.js', 'utf8')
   assert.match(cli, /^#!\/usr\/bin\/env node\n/)
-  const result = await execFileAsync(process.execPath, [
-    'dist/cli.js',
-    '--version',
-  ])
+  const result = await execFileAsync(
+    process.execPath,
+    ['dist/cli.js', '--version'],
+    {
+      env: { ...process.env, CI: 'true' },
+    },
+  )
   assert.equal(result.stdout.trim(), packageJson.version)
 })
 

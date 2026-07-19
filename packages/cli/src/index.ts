@@ -38,6 +38,10 @@ const main = defineCommand({
 })
 
 const argv = process.argv.slice(2)
+if (argv.length === 1 && ['--version', '-v'].includes(argv[0] ?? '')) {
+  process.stdout.write(`${storymineVersion}\n`)
+  process.exit(0)
+}
 if (
   argv.length === 0 ||
   (argv.length === 1 && ['help', '--help', '-h'].includes(argv[0] ?? ''))
