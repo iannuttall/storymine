@@ -4,6 +4,9 @@ export interface RedactionResult {
 }
 
 const patterns: Array<[RegExp, string]> = [
+  [/\/Users\/[^/\s]+(?=\/|\b)/g, '~'],
+  [/\/home\/[^/\s]+(?=\/|\b)/g, '~'],
+  [/[A-Z]:\\Users\\[^\\\s]+(?=\\|\b)/gi, '~'],
   [/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[REDACTED_EMAIL]'],
   [/\b(?:sk|pk|rk)-[A-Za-z0-9_-]{20,}\b/g, '[REDACTED_SECRET]'],
   [

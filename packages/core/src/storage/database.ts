@@ -697,6 +697,7 @@ export function listTranscriptFindings(
   options: {
     minConfidence?: number
     withoutCandidate?: boolean
+    reviewStatus?: 'unreviewed' | 'approved' | 'rejected' | 'needs-work'
     limit?: number
   } = {},
 ): TranscriptFinding[] {
@@ -718,12 +719,17 @@ export function listTranscriptFindings(
       FROM transcript_findings
       WHERE confidence >= @minConfidence
         AND (@withoutCandidate = 0 OR candidate_id IS NULL)
+        AND (
+          @reviewStatus IS NULL
+          OR COALESCE(json_extract(metadata_json, '$.reviewStatus'), 'unreviewed') = @reviewStatus
+        )
       ORDER BY confidence DESC, captured_at DESC
       LIMIT @limit`,
     )
     .all({
       minConfidence: options.minConfidence ?? 0,
       withoutCandidate: options.withoutCandidate ? 1 : 0,
+      reviewStatus: options.reviewStatus ?? null,
       limit,
     }) as Array<
     Omit<TranscriptFinding, 'evidence' | 'metadata'> & {

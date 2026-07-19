@@ -1,6 +1,5 @@
+import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { defaultKnowledgeDbPath } from './collectors/app-usage.js'
-import { defaultChromeHistoryPath } from './collectors/chrome-history.js'
 import { ensureResearchDirs, fileSize, getResearchPaths } from './paths.js'
 import { getStorageStats } from './storage/database.js'
 import { defaultClaudeRoot, defaultCodexRoot } from './transcripts/discovery.js'
@@ -54,11 +53,37 @@ export function runDoctorChecks(): DoctorCheck[] {
   return [
     pathCheck('Config directory', paths.configDir),
     pathCheck('Cache directory', paths.cacheDir),
-    pathCheck('Screen Time database', defaultKnowledgeDbPath()),
-    pathCheck('Chrome history database', defaultChromeHistoryPath()),
-    pathCheck('Claude root', defaultClaudeRoot()),
-    pathCheck('Codex root', defaultCodexRoot()),
+    pathCheck('Claude chats', defaultClaudeRoot()),
+    pathCheck('Codex chats', defaultCodexRoot()),
+    checkCommandAvailability('Codex command', 'codex'),
+    checkCommandAvailability('Claude command', 'claude'),
   ]
+}
+
+export function checkCommandAvailability(
+  name: string,
+  command: string,
+): DoctorCheck {
+  const result = spawnSync(command, ['--version'], {
+    encoding: 'utf8',
+    timeout: 3000,
+  })
+  const ok = result.status === 0
+  const output =
+    typeof result.stdout === 'string' && result.stdout.trim()
+      ? result.stdout.trim()
+      : typeof result.stderr === 'string' && result.stderr.trim()
+        ? result.stderr.trim()
+        : null
+  return {
+    name,
+    ok,
+    detail: ok
+      ? (output ?? command)
+      : result.error && 'code' in result.error && result.error.code === 'ENOENT'
+        ? `${command} not found in PATH`
+        : (output ?? `${command} could not run`),
+  }
 }
 
 function pathCheck(name: string, path: string): DoctorCheck {

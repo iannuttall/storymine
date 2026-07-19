@@ -11,3 +11,12 @@ test('redactText removes obvious secrets and emails', () => {
   assert.match(result.text, /\[REDACTED_EMAIL\]/)
   assert.match(result.text, /\[REDACTED_SECRET\]/)
 })
+
+test('redactText removes usernames from home directory paths', () => {
+  const result = redactText(
+    'Read /Users/ian/dev/private/file.ts and C:\\Users\\ian\\repo\\notes.md',
+  )
+
+  assert.equal(result.count, 2)
+  assert.equal(result.text, 'Read ~/dev/private/file.ts and ~\\repo\\notes.md')
+})

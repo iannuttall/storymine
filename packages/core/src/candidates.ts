@@ -19,6 +19,7 @@ export interface PromoteFindingsOptions {
   limit?: number
   force?: boolean
   maxPerAlphaType?: number
+  includeUnreviewed?: boolean
 }
 
 export interface PromoteFindingsResult {
@@ -34,7 +35,10 @@ export function promoteTranscriptFindings(
     listTranscriptFindings(database, {
       minConfidence: options.minConfidence ?? 0.7,
       withoutCandidate: !options.force,
-      limit: Math.max(options.limit ?? 25, 100),
+      ...(!options.includeUnreviewed
+        ? { reviewStatus: 'approved' as const }
+        : {}),
+      limit: 1000,
     }).filter(isCompleteStoryFinding),
   )
   const findings = diversifyFindings(

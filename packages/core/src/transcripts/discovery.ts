@@ -8,6 +8,7 @@ import {
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
+import type Database from 'better-sqlite3'
 import {
   type TranscriptFile,
   type TranscriptProvider,
@@ -82,8 +83,8 @@ export function discoverTranscriptFiles(
 
 export function indexTranscriptFiles(
   options: TranscriptDiscoveryOptions = {},
+  database: Database.Database = getDb(),
 ): TranscriptIndexResult {
-  const database = getDb()
   const run = createSourceRun(database, {
     source: 'transcript',
     command: 'research me transcripts index',

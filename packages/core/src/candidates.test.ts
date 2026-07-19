@@ -117,6 +117,7 @@ test('promoteTranscriptFindings clusters semantic repeats', () => {
         candidateId: null,
         capturedAt: '2026-06-20T10:00:00.000Z',
         metadata: {
+          reviewStatus: 'approved',
           alphaType: 'prompt-pattern',
           alphaScore: 0.84,
           mistakeToAvoid: 'Asking for less robotic writing.',
@@ -137,6 +138,7 @@ test('promoteTranscriptFindings clusters semantic repeats', () => {
         candidateId: null,
         capturedAt: '2026-06-20T10:01:00.000Z',
         metadata: {
+          reviewStatus: 'approved',
           alphaType: 'prompt-pattern',
           alphaScore: 0.85,
           mistakeToAvoid: 'Saying make this sound human.',
@@ -157,11 +159,29 @@ test('promoteTranscriptFindings clusters semantic repeats', () => {
         candidateId: null,
         capturedAt: '2026-06-20T10:02:00.000Z',
         metadata: {
+          reviewStatus: 'approved',
           alphaType: 'course-correction',
           alphaScore: 0.82,
           mistakeToAvoid: 'Letting examples become the whole task.',
           examplePrompt:
             'These examples are illustrative; inspect the source first.',
+        },
+      },
+      {
+        id: 'finding_4',
+        sessionId: 'session_1',
+        chunkId: 'chunk_1',
+        lesson: 'Tell AI to remove secrets before it shares debug output.',
+        whyNonObvious: 'Debug output can contain private values.',
+        category: 'security',
+        confidence: 0.99,
+        evidence: ['A private token appeared in a debug response.'],
+        candidateId: null,
+        capturedAt: '2026-06-20T10:03:00.000Z',
+        metadata: {
+          alphaType: 'privacy-safety',
+          alphaScore: 0.99,
+          examplePrompt: 'Redact secrets before showing debug output.',
         },
       },
     ])

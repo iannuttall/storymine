@@ -14,6 +14,7 @@ import {
   upsertSessionSummary,
 } from '../storage/database.js'
 import type { TranscriptAuditModel } from './audit.js'
+import { redactText } from './redaction.js'
 
 export interface SummarizeSessionsOptions {
   model: TranscriptAuditModel
@@ -25,6 +26,7 @@ export interface SummarizeSessionsOptions {
   now?: number
   maxPromptTokens?: number
   concurrency?: number
+  sessionIds?: string[]
   database?: Database.Database
   onProgress?: (event: SummarizeProgressEvent) => void
 }
@@ -43,6 +45,7 @@ export interface SummarizeResult {
   skipped: number
   failed: number
   summaries: SessionSummary[]
+  failures: Array<{ sessionId: string; reason: string }>
 }
 
 export async function summarizeSessions(
@@ -56,14 +59,22 @@ export async function summarizeSessions(
     1000,
     Math.min(options.maxPromptTokens ?? 10_000, 40_000),
   )
+  const allowedSessionIds = options.sessionIds
+    ? new Set(options.sessionIds)
+    : null
   const sessions = listTranscriptSessionsInWindow(database, {
     sinceMs: now - days * 86_400_000,
     ...(options.provider ? { provider: options.provider } : {}),
     ...(options.project ? { project: options.project } : {}),
     limit: 5000,
-  })
+  }).filter((session) =>
+    allowedSessionIds ? allowedSessionIds.has(session.id) : true,
+  )
 
-  const summaries: SessionSummary[] = []
+  const completed: Array<SessionSummary | undefined> = []
+  const failedByIndex: Array<
+    { sessionId: string; reason: string } | undefined
+  > = []
   let summarized = 0
   let skipped = 0
   let failed = 0
@@ -123,15 +134,17 @@ export async function summarizeSessions(
         const output = await options.model.complete(prompt)
         const summary = summaryFromResponse(session, chunks.length, output)
         upsertSessionSummary(database, summary)
-        summaries.push(summary)
+        completed[index] = summary
         summarized += 1
         options.onProgress?.({ ...progress, status: 'summarized' })
       } catch (error) {
         failed += 1
+        const reason = error instanceof Error ? error.message : String(error)
+        failedByIndex[index] = { sessionId: session.id, reason }
         options.onProgress?.({
           ...progress,
           status: 'failed',
-          reason: error instanceof Error ? error.message : String(error),
+          reason,
         })
       }
     }
@@ -147,7 +160,17 @@ export async function summarizeSessions(
     summarized,
     skipped,
     failed,
-    summaries,
+    summaries: completed.filter(
+      (summary): summary is SessionSummary => summary !== undefined,
+    ),
+    failures: failedByIndex.filter(
+      (
+        failure,
+      ): failure is {
+        sessionId: string
+        reason: string
+      } => failure !== undefined,
+    ),
   }
 }
 
@@ -172,7 +195,7 @@ export function summarizePrompt(
   chunks: TranscriptChunk[],
   maxPromptTokens: number,
 ): string {
-  const body = boundedChunkText(chunks, maxPromptTokens)
+  const body = boundedTranscriptText(chunks, maxPromptTokens)
   return [
     'You are summarizing one AI coding session so it can be mined for newsletter stories later.',
     'The transcript is already redacted. Do not invent details. Only use what the transcript shows.',
@@ -200,8 +223,8 @@ export function summarizePrompt(
     '',
     `Provider: ${session.provider}`,
     `Session: ${session.id}`,
-    ...(session.cwd ? [`Project: ${session.cwd}`] : []),
-    ...(session.title ? [`Title: ${session.title}`] : []),
+    ...(session.cwd ? [`Project: ${redactText(session.cwd).text}`] : []),
+    ...(session.title ? [`Title: ${redactText(session.title).text}`] : []),
     '',
     'Transcript:',
     body,
@@ -213,15 +236,17 @@ export function summarizePrompt(
 const FRICTION_PATTERN =
   /<turn_aborted>|\bno no\b|\bstop\b|\bdon'?t\b|\bdo not\b|\bwrong\b|\brevert\b|\bundo\b|why (?:did|are|would) you|too (?:much|far)|over the top|overboard|overengineer|didn'?t ask|unprompted/i
 
-function isFrictionChunk(chunk: TranscriptChunk): boolean {
+function isFrictionChunk(
+  chunk: Pick<TranscriptChunk, 'redactedText' | 'tokenEstimate'>,
+): boolean {
   return (
     chunk.redactedText.includes('[user]') &&
     FRICTION_PATTERN.test(chunk.redactedText)
   )
 }
 
-function boundedChunkText(
-  chunks: TranscriptChunk[],
+export function boundedTranscriptText(
+  chunks: Array<Pick<TranscriptChunk, 'redactedText' | 'tokenEstimate'>>,
   maxPromptTokens: number,
 ): string {
   const total = chunks.reduce((sum, chunk) => sum + chunk.tokenEstimate, 0)
@@ -280,7 +305,7 @@ function boundedChunkText(
   return parts.join('\n\n')
 }
 
-function summaryFromResponse(
+export function summaryFromResponse(
   session: {
     id: string
     provider: string
@@ -291,8 +316,10 @@ function summaryFromResponse(
   output: string,
 ): SessionSummary {
   const object = parseJsonObject(output)
-  const summaryText =
-    asString(object.summary) ?? 'No summary was produced for this session.'
+  const summaryText = asString(object.summary)
+  if (!summaryText) {
+    throw new Error('model did not return a valid session summary')
+  }
   return {
     sessionId: session.id,
     provider: session.provider as TranscriptProvider,
@@ -327,7 +354,8 @@ function parseJsonObject(value: string): Record<string, unknown> {
 }
 
 function asString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null
+  if (typeof value !== 'string' || !value.trim()) return null
+  return redactText(value.trim()).text
 }
 
 function asStringArray(value: unknown): string[] {

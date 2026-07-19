@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import {
+  getSessionSummary,
   openResearchDb,
   upsertTranscriptChunks,
   upsertTranscriptFiles,
@@ -114,6 +115,37 @@ test('summarizeSessions is idempotent and resumable', async () => {
     })
     assert.equal(forced.summarized, 1)
     assert.equal(model.calls, 2)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('summarizeSessions rejects invalid model output and retries it later', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'research-summarize-invalid-'))
+  try {
+    const db = seedSession(join(dir, 'test.db'))
+    const invalid = countingModel('I could not produce JSON.')
+    const first = await summarizeSessions({
+      model: invalid,
+      days: 365,
+      database: db,
+      now: Date.now(),
+    })
+
+    assert.equal(first.summarized, 0)
+    assert.equal(first.failed, 1)
+    assert.match(first.failures[0]?.reason ?? '', /valid session summary/)
+    assert.equal(getSessionSummary(db, 'session_1'), null)
+
+    const valid = countingModel(RESPONSE)
+    const second = await summarizeSessions({
+      model: valid,
+      days: 365,
+      database: db,
+      now: Date.now(),
+    })
+    assert.equal(second.summarized, 1)
+    assert.equal(valid.calls, 1)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

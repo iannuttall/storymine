@@ -1,3 +1,4 @@
+import type Database from 'better-sqlite3'
 import {
   deleteTranscriptChunksForSession,
   getDb,
@@ -26,8 +27,8 @@ export interface ProcessTranscriptResult {
 
 export function processTranscriptFiles(
   options: ProcessTranscriptOptions = {},
+  database: Database.Database = getDb(),
 ): ProcessTranscriptResult {
-  const database = getDb()
   const limit = Math.max(1, Math.min(options.limit ?? 20, 1000))
   const files = listTranscriptFiles(database, {
     ...(options.provider ? { provider: options.provider } : {}),

@@ -15,17 +15,24 @@ let memoizedPaths: ResearchPaths | undefined
 export function getResearchPaths(): ResearchPaths {
   if (memoizedPaths) return memoizedPaths
 
-  const paths = envPaths('research', { suffix: '' })
-  const configDir = process.env.RESEARCH_CONFIG_DIR ?? paths.config
-  const cacheDir = process.env.RESEARCH_CACHE_DIR ?? paths.cache
-  const logDir = process.env.RESEARCH_LOG_DIR ?? paths.log
+  const paths = envPaths('storymine', { suffix: '' })
+  const configDir =
+    process.env.STORYMINE_CONFIG_DIR ??
+    process.env.RESEARCH_CONFIG_DIR ??
+    paths.config
+  const cacheDir =
+    process.env.STORYMINE_CACHE_DIR ??
+    process.env.RESEARCH_CACHE_DIR ??
+    paths.cache
+  const logDir =
+    process.env.STORYMINE_LOG_DIR ?? process.env.RESEARCH_LOG_DIR ?? paths.log
 
   memoizedPaths = {
     configDir,
     cacheDir,
     logDir,
     configFile: join(configDir, 'config.json'),
-    cacheDbFile: join(cacheDir, 'research.db'),
+    cacheDbFile: join(cacheDir, 'storymine.db'),
   }
 
   return memoizedPaths

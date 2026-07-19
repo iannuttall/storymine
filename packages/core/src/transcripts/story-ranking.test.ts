@@ -5,6 +5,7 @@ import type { SessionSummary, TranscriptFinding } from '../schemas.js'
 import {
   isCompleteStoryFinding,
   rankStorySessions,
+  storyProjectKey,
   validateStoryFields,
 } from './story-ranking.js'
 
@@ -31,7 +32,7 @@ function summary(overrides: Partial<SessionSummary>): SessionSummary {
 
 function artifact(overrides: Partial<Artifact>): Artifact {
   return {
-    kind: 'sandbox-project',
+    kind: 'local-project',
     path: '/Users/me/dev/sandbox/png-to-svg',
     name: 'png-to-svg',
     firstChangeMs: null,
@@ -52,6 +53,26 @@ test('rankStorySessions boosts sessions that built a matched artifact', () => {
   assert.equal(ranked[0]?.summary.sessionId, 'built')
   assert.ok(ranked[0]?.matchedArtifacts.length === 1)
   assert.ok((ranked[0]?.score ?? 0) > (ranked[1]?.score ?? 0))
+})
+
+test('rankStorySessions does not rank empty fallback summaries', () => {
+  const empty = summary({
+    sessionId: 'empty',
+    summary: 'No summary was produced for this session.',
+    chunkCount: 20,
+  })
+  const ranked = rankStorySessions([empty], [artifact({})])
+
+  assert.equal(ranked[0]?.score, 0)
+  assert.deepEqual(ranked[0]?.reasons, [])
+})
+
+test('storyProjectKey groups worktrees with their real project', () => {
+  assert.equal(
+    storyProjectKey('/Users/me/conductor/workspaces/keep/lilongwe'),
+    'keep',
+  )
+  assert.equal(storyProjectKey('/Users/me/.codex/worktrees/1234/seo'), 'seo')
 })
 
 test('rankStorySessions does not let skill count outrank a new project', () => {

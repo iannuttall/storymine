@@ -3,11 +3,12 @@ import {
   type Dirent,
   existsSync,
   readdirSync,
+  readFileSync,
   type Stats,
   statSync,
 } from 'node:fs'
-import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
+import type Database from 'better-sqlite3'
 import { type Signal, signalSchema } from '../schemas.js'
 import {
   completeSourceRun,
@@ -21,7 +22,26 @@ export type ArtifactKind =
   | 'git-repo-active'
   | 'new-repo'
   | 'skill'
-  | 'sandbox-project'
+  | 'local-project'
+
+export type ArtifactWorkType =
+  | 'new-tool'
+  | 'new-project'
+  | 'new-feature'
+  | 'active-project'
+
+export interface ArtifactTopicSignal {
+  topic: string
+  score: number
+  matches: string[]
+}
+
+export interface ArtifactLinks {
+  repositoryUrl: string | null
+  publicUrls: string[]
+  packageName: string | null
+  packagePrivate: boolean | null
+}
 
 export interface Artifact {
   kind: ArtifactKind
@@ -34,15 +54,16 @@ export interface Artifact {
 
 export interface ArtifactScanOptions {
   root?: string
-  sandboxRoot?: string
+  projectPaths?: string[]
   days?: number
   now?: number
   maxDepth?: number
   maxRepos?: number
+  topics?: string[]
 }
 
 export interface ArtifactScanResult {
-  root: string
+  root: string | null
   sinceMs: number
   artifacts: Artifact[]
 }
@@ -73,8 +94,8 @@ const IGNORED_DIRS = new Set([
 
 const GIT_UNIT_SEPARATOR = '\u001f'
 
-export function defaultDevRoot(): string {
-  return join(homedir(), 'dev')
+export function defaultArtifactRoot(): string {
+  return process.cwd()
 }
 
 export function scanArtifacts(
@@ -83,16 +104,22 @@ export function scanArtifacts(
   const now = options.now ?? Date.now()
   const days = Math.max(1, Math.min(options.days ?? 7, 365))
   const sinceMs = now - days * 86_400_000
-  const root = options.root ?? defaultDevRoot()
-  const sandboxRoot = options.sandboxRoot ?? join(root, 'sandbox')
+  const fallbackRoot = options.root ?? defaultArtifactRoot()
   const maxDepth = Math.max(1, Math.min(options.maxDepth ?? 4, 8))
   const maxRepos = Math.max(1, Math.min(options.maxRepos ?? 300, 2000))
 
-  const walk = walkDevTree(root, maxDepth)
+  const projectsWereSelected = options.projectPaths !== undefined
+  const explicitProjects = [...new Set(options.projectPaths ?? [])].filter(
+    (path) => existsSync(path),
+  )
+  const root = projectsWereSelected ? null : fallbackRoot
+  const walk = projectsWereSelected
+    ? walkProjectPaths(explicitProjects, maxDepth)
+    : walkDevTree(fallbackRoot, maxDepth)
   const artifacts: Artifact[] = []
 
   for (const repoDir of prioritizeByMtime(walk.repoDirs).slice(0, maxRepos)) {
-    const repo = describeGitRepo(repoDir, sinceMs)
+    const repo = describeGitRepo(repoDir, sinceMs, options.topics ?? [])
     if (repo) artifacts.push(repo)
   }
 
@@ -105,12 +132,25 @@ export function scanArtifacts(
       name: skillName(skill),
       firstChangeMs: null,
       lastChangeMs: Math.trunc(stat.mtimeMs),
-      detail: { file: skill },
+      detail: {
+        file: skill,
+        workType: 'new-feature' satisfies ArtifactWorkType,
+        toolSignals: [`skill:${skillName(skill)}`],
+        topics: classifyArtifactTopics(
+          [skillName(skill), skill],
+          options.topics ?? [],
+        ),
+      },
     })
   }
 
-  for (const project of scanSandboxProjects(sandboxRoot, sinceMs)) {
-    artifacts.push(project)
+  for (const projectPath of walk.localProjectDirs) {
+    const project = describeLocalProject(
+      projectPath,
+      sinceMs,
+      options.topics ?? [],
+    )
+    if (project) artifacts.push(project)
   }
 
   return { root, sinceMs, artifacts: dedupeArtifacts(artifacts) }
@@ -118,13 +158,17 @@ export function scanArtifacts(
 
 export function storeArtifactSignals(
   options: ArtifactScanOptions = {},
+  database: Database.Database = getDb(),
 ): StoreArtifactsResult {
-  const database = getDb()
   const scan = scanArtifacts(options)
   const run = createSourceRun(database, {
     source: 'artifact',
-    command: 'research me artifacts',
-    options: { root: scan.root, sinceMs: scan.sinceMs },
+    command: 'storymine me artifacts',
+    options: {
+      root: scan.root,
+      projectCount: options.projectPaths?.length ?? 0,
+      sinceMs: scan.sinceMs,
+    },
   })
   try {
     const signals = scan.artifacts.map((artifact) =>
@@ -180,7 +224,7 @@ function artifactSummary(artifact: Artifact): string {
 
 function weightForKind(kind: ArtifactKind): number {
   if (kind === 'new-repo') return 0.9
-  if (kind === 'sandbox-project') return 0.85
+  if (kind === 'local-project') return 0.85
   if (kind === 'skill') return 0.8
   return 0.6
 }
@@ -188,12 +232,14 @@ function weightForKind(kind: ArtifactKind): number {
 interface DevTreeWalk {
   repoDirs: string[]
   skillFiles: string[]
+  localProjectDirs: string[]
 }
 
 function walkDevTree(root: string, maxDepth: number): DevTreeWalk {
   const repoDirs: string[] = []
   const skillFiles: string[] = []
-  if (!existsSync(root)) return { repoDirs, skillFiles }
+  const localProjectDirs: string[] = []
+  if (!existsSync(root)) return { repoDirs, skillFiles, localProjectDirs }
 
   const stack: Array<{ dir: string; depth: number }> = [{ dir: root, depth: 0 }]
   while (stack.length > 0) {
@@ -223,7 +269,28 @@ function walkDevTree(root: string, maxDepth: number): DevTreeWalk {
       }
     }
   }
-  return { repoDirs, skillFiles }
+  return { repoDirs, skillFiles, localProjectDirs }
+}
+
+function walkProjectPaths(paths: string[], maxDepth: number): DevTreeWalk {
+  const repoDirs = new Set<string>()
+  const skillFiles = new Set<string>()
+  const localProjectDirs = new Set<string>()
+  for (const path of paths) {
+    const gitRoot = runGit(path, ['rev-parse', '--show-toplevel'])
+      ?.trim()
+      .split('\n')[0]
+    const projectRoot = gitRoot && existsSync(gitRoot) ? gitRoot : path
+    if (gitRoot) repoDirs.add(projectRoot)
+    else localProjectDirs.add(projectRoot)
+    const walked = walkDevTree(projectRoot, maxDepth)
+    for (const skill of walked.skillFiles) skillFiles.add(skill)
+  }
+  return {
+    repoDirs: [...repoDirs],
+    skillFiles: [...skillFiles],
+    localProjectDirs: [...localProjectDirs],
+  }
 }
 
 function isSkillFile(dir: string, name: string): boolean {
@@ -242,7 +309,11 @@ function dirnameOf(file: string): string {
   return index === -1 ? file : file.slice(0, index)
 }
 
-function describeGitRepo(repoDir: string, sinceMs: number): Artifact | null {
+function describeGitRepo(
+  repoDir: string,
+  sinceMs: number,
+  interests: string[],
+): Artifact | null {
   const sinceIso = new Date(sinceMs).toISOString()
   const log = runGit(repoDir, [
     'log',
@@ -270,6 +341,42 @@ function describeGitRepo(repoDir: string, sinceMs: number): Artifact | null {
     ? Date.parse(rootIso.split('\n')[0]?.trim() ?? '')
     : Number.NaN
   const isNew = Number.isFinite(rootMs) && rootMs >= sinceMs
+  const recentFiles = recentCreatedFiles(repoDir, sinceIso)
+  const createdFiles = recentFiles.files
+  const packageInfo = readPackageInfo(repoDir)
+  const repositoryUrl =
+    normalizeRepositoryUrl(runGit(repoDir, ['remote', 'get-url', 'origin'])) ??
+    normalizeRepositoryUrl(packageInfo.repositoryUrl)
+  const publicUrls = configuredPublicUrls(repoDir, packageInfo.homepage)
+  const toolSignals = detectToolSignals(createdFiles, packageInfo.binNames)
+  const topics = classifyArtifactTopics(
+    [
+      basename(repoDir),
+      ...subjects,
+      ...createdFiles,
+      packageInfo.description ?? '',
+      ...packageInfo.keywords,
+    ],
+    interests,
+  )
+  const looksLikeTool =
+    toolSignals.length > 0 ||
+    /(^|\/)cli(\/|$)/i.test(repoDir) ||
+    createdFiles.some((file) =>
+      /(^|\/)(?:scripts?|skills?|bin|commands?)(\/|$)/i.test(file),
+    )
+  const hasFeatureCommit = subjects.some((subject) =>
+    /^(?:feat|build)(?:\([^)]*\))?:|\b(?:add|build|create|launch|ship)\b/i.test(
+      subject,
+    ),
+  )
+  const workType: ArtifactWorkType = isNew
+    ? looksLikeTool
+      ? 'new-tool'
+      : 'new-project'
+    : hasFeatureCommit
+      ? 'new-feature'
+      : 'active-project'
   return {
     kind: isNew ? 'new-repo' : 'git-repo-active',
     path: repoDir,
@@ -279,35 +386,331 @@ function describeGitRepo(repoDir: string, sinceMs: number): Artifact | null {
     detail: {
       commitCount: lines.length,
       subjects: subjects.slice(0, 5),
+      createdFiles,
+      createdFileCount: recentFiles.total,
+      toolSignals,
+      workType,
+      topics,
+      links: {
+        repositoryUrl,
+        publicUrls,
+        packageName: packageInfo.name,
+        packagePrivate: packageInfo.private,
+      } satisfies ArtifactLinks,
       ...(isNew && Number.isFinite(rootMs) ? { rootCommitMs: rootMs } : {}),
     },
   }
 }
 
-function scanSandboxProjects(sandboxRoot: string, sinceMs: number): Artifact[] {
-  if (!existsSync(sandboxRoot)) return []
-  let entries: Dirent[]
+interface PackageInfo {
+  name: string | null
+  description: string | null
+  homepage: string | null
+  repositoryUrl: string | null
+  private: boolean | null
+  binNames: string[]
+  keywords: string[]
+}
+
+function readPackageInfo(repoDir: string): PackageInfo {
+  const empty: PackageInfo = {
+    name: null,
+    description: null,
+    homepage: null,
+    repositoryUrl: null,
+    private: null,
+    binNames: [],
+    keywords: [],
+  }
+  const path = join(repoDir, 'package.json')
+  const stat = safeStat(path)
+  if (!stat || stat.size > 512 * 1024) return empty
   try {
-    entries = readdirSync(sandboxRoot, { withFileTypes: true })
+    const value = JSON.parse(readFileSync(path, 'utf8')) as Record<
+      string,
+      unknown
+    >
+    const repository = value.repository
+    const repositoryUrl =
+      typeof repository === 'string'
+        ? repository
+        : repository && typeof repository === 'object'
+          ? textValue((repository as Record<string, unknown>).url)
+          : null
+    return {
+      name: textValue(value.name),
+      description: textValue(value.description),
+      homepage: textValue(value.homepage),
+      repositoryUrl,
+      private: typeof value.private === 'boolean' ? value.private : null,
+      binNames: packageBinNames(value.name, value.bin),
+      keywords: Array.isArray(value.keywords)
+        ? value.keywords.filter(
+            (item): item is string => typeof item === 'string',
+          )
+        : [],
+    }
   } catch {
+    return empty
+  }
+}
+
+function packageBinNames(name: unknown, bin: unknown): string[] {
+  if (typeof bin === 'string') {
+    const packageName = textValue(name)
+    return packageName ? [packageName.replace(/^@[^/]+\//, '')] : ['cli']
+  }
+  if (!bin || typeof bin !== 'object' || Array.isArray(bin)) return []
+  return Object.keys(bin as Record<string, unknown>).slice(0, 20)
+}
+
+function detectToolSignals(
+  createdFiles: string[],
+  binNames: string[],
+): string[] {
+  const files = createdFiles.flatMap((file) => {
+    const skill = file.match(/(?:^|\/)skills\/([^/]+)\/SKILL\.md$/i)
+    if (skill?.[1]) return [`skill:${skill[1]}`]
+    const command = file.match(
+      /(?:^|\/)(?:commands?|scripts?|bin)\/([^/]+?)(?:\.[a-z0-9]+)?$/i,
+    )
+    if (command?.[1]) return [`file:${command[1]}`]
     return []
+  })
+  return [
+    ...new Set([...binNames.map((name) => `command:${name}`), ...files]),
+  ].slice(0, 20)
+}
+
+function recentCreatedFiles(
+  repoDir: string,
+  sinceIso: string,
+): { files: string[]; total: number } {
+  const value = runGit(repoDir, [
+    'log',
+    `--since=${sinceIso}`,
+    '--diff-filter=A',
+    '--name-only',
+    '--format=',
+  ])
+  if (!value) return { files: [], total: 0 }
+  const files = [
+    ...new Set(
+      value
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean),
+    ),
+  ].sort()
+  return { files: files.slice(0, 30), total: files.length }
+}
+
+function normalizeRepositoryUrl(value: string | null): string | null {
+  const raw = value?.trim().split('\n')[0]?.trim()
+  if (!raw) return null
+  const ssh = raw.match(/^git@([^:]+):(.+)$/)
+  const normalized = ssh
+    ? `https://${ssh[1]}/${ssh[2]}`
+    : raw.replace(/^git\+/, '').replace(/^ssh:\/\/git@([^/]+)\//, 'https://$1/')
+  if (!/^https?:\/\//i.test(normalized)) return null
+  try {
+    const url = new URL(normalized.replace(/\.git\/?$/, ''))
+    url.username = ''
+    url.password = ''
+    return url.toString().replace(/\/$/, '')
+  } catch {
+    return null
   }
-  const artifacts: Artifact[] = []
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith('.')) continue
-    const dir = join(sandboxRoot, entry.name)
-    const lastMs = latestMtimeMs(dir, 2)
-    if (lastMs === null || lastMs < sinceMs) continue
-    artifacts.push({
-      kind: 'sandbox-project',
-      path: dir,
-      name: entry.name,
-      firstChangeMs: null,
-      lastChangeMs: lastMs,
-      detail: { project: entry.name },
-    })
+}
+
+function configuredPublicUrls(
+  repoDir: string,
+  packageHomepage: string | null,
+): string[] {
+  const urls = new Set<string>()
+  const homepage = publicHttpUrl(packageHomepage)
+  if (homepage) urls.add(homepage)
+
+  const cname = readSmallFile(join(repoDir, 'CNAME'), 4096)?.trim()
+  if (cname && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(cname)) {
+    urls.add(`https://${cname.toLowerCase()}`)
   }
-  return artifacts
+
+  for (const file of ['wrangler.toml', 'wrangler.json', 'wrangler.jsonc']) {
+    const value = readSmallFile(join(repoDir, file), 256 * 1024)
+    if (!value) continue
+    const pattern = /["']?(?:pattern|route)["']?\s*[:=]\s*["']([^"']+)["']/gi
+    for (const match of value.matchAll(pattern)) {
+      const candidate = (match[1] ?? '').replace(/\/\*.*$/, '')
+      const url = publicHttpUrl(
+        /^https?:\/\//i.test(candidate) ? candidate : `https://${candidate}`,
+      )
+      if (url) urls.add(url)
+    }
+  }
+  return [...urls]
+}
+
+function publicHttpUrl(value: string | null): string | null {
+  if (!value || !/^https?:\/\//i.test(value)) return null
+  try {
+    const url = new URL(value)
+    url.username = ''
+    url.password = ''
+    return url.toString().replace(/\/$/, '')
+  } catch {
+    return null
+  }
+}
+
+function readSmallFile(path: string, maxBytes: number): string | null {
+  const stat = safeStat(path)
+  if (!stat || stat.size > maxBytes) return null
+  try {
+    return readFileSync(path, 'utf8')
+  } catch {
+    return null
+  }
+}
+
+const TOPIC_ALIASES: Record<string, string[]> = {
+  marketing: [
+    'marketing',
+    'newsletter',
+    'campaign',
+    'landing page',
+    'copywriting',
+    'conversion',
+    'brand',
+    'social',
+    'email',
+  ],
+  seo: [
+    'seo',
+    'search console',
+    'sitemap',
+    'robots',
+    'structured data',
+    'organic',
+    'keyword',
+    'crawler',
+    'indexing',
+    'serp',
+    'llms.txt',
+  ],
+  'ai coding': [
+    'ai coding',
+    'codex',
+    'claude',
+    'agent',
+    'prompt',
+    'mcp',
+    'llm',
+    'transcript',
+    'skill',
+  ],
+  'product building': [
+    'cli',
+    'app',
+    'tool',
+    'package',
+    'extension',
+    'ios',
+    'android',
+    'saas',
+    'product',
+    'workflow',
+  ],
+}
+
+export function classifyArtifactTopics(
+  values: string[],
+  interests: string[],
+): ArtifactTopicSignal[] {
+  const text = values.join(' ').toLowerCase()
+  const signals: ArtifactTopicSignal[] = []
+  const uniqueInterests = [
+    ...new Map(
+      interests
+        .map((interest) => interest.trim())
+        .filter(Boolean)
+        .map((interest) => [interest.toLowerCase(), interest]),
+    ).values(),
+  ]
+  for (const topic of uniqueInterests) {
+    const key = topic.toLowerCase().replace(/[-_]+/g, ' ')
+    const fallbackTerms = [
+      key,
+      ...key.split(/[^a-z0-9]+/).filter((term) => term.length >= 3),
+    ]
+    const terms = [...new Set(TOPIC_ALIASES[key] ?? fallbackTerms)]
+    const matches = terms.filter((term) =>
+      new RegExp(`(^|[^a-z0-9])${escapeRegex(term)}([^a-z0-9]|$)`, 'i').test(
+        text,
+      ),
+    )
+    if (matches.length > 0) {
+      signals.push({
+        topic,
+        score: Math.min(1, Number((0.45 + matches.length * 0.15).toFixed(2))),
+        matches,
+      })
+    }
+  }
+  return signals.sort(
+    (left, right) =>
+      right.score - left.score || left.topic.localeCompare(right.topic),
+  )
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function textValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function describeLocalProject(
+  projectPath: string,
+  sinceMs: number,
+  interests: string[],
+): Artifact | null {
+  const projectStat = safeStat(projectPath)
+  if (!projectStat?.isDirectory()) return null
+  const markers = [
+    'package.json',
+    'pyproject.toml',
+    'Cargo.toml',
+    'Package.swift',
+    'go.mod',
+    'Gemfile',
+  ].filter((file) => existsSync(join(projectPath, file)))
+  if (markers.length === 0) return null
+  const lastMs = latestMtimeMs(projectPath, 2)
+  if (lastMs === null || lastMs < sinceMs) return null
+  const createdMs = Number.isFinite(projectStat.birthtimeMs)
+    ? Math.trunc(projectStat.birthtimeMs)
+    : null
+  const isNew = createdMs !== null && createdMs >= sinceMs
+  return {
+    kind: 'local-project',
+    path: projectPath,
+    name: basename(projectPath),
+    firstChangeMs: createdMs,
+    lastChangeMs: lastMs,
+    detail: {
+      project: basename(projectPath),
+      workType: (isNew
+        ? 'new-project'
+        : 'active-project') satisfies ArtifactWorkType,
+      markers,
+      topics: classifyArtifactTopics(
+        [basename(projectPath), ...markers],
+        interests,
+      ),
+    },
+  }
 }
 
 function latestMtimeMs(dir: string, maxDepth: number): number | null {

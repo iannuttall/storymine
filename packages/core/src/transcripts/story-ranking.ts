@@ -1,5 +1,11 @@
 import { basename } from 'node:path'
-import type { Artifact, ArtifactKind } from '../artifacts/scan.js'
+import {
+  type Artifact,
+  type ArtifactKind,
+  type ArtifactTopicSignal,
+  classifyArtifactTopics,
+} from '../artifacts/scan.js'
+import { topicsOf } from '../artifacts/work.js'
 import type { SessionSummary, TranscriptFinding } from '../schemas.js'
 
 export interface RankedStorySession {
@@ -7,6 +13,7 @@ export interface RankedStorySession {
   score: number
   reasons: string[]
   matchedArtifacts: Artifact[]
+  topicMatches: ArtifactTopicSignal[]
   repeatedOpinions: string[]
 }
 
@@ -24,7 +31,16 @@ export interface StoryValidation {
 }
 
 const FAILURE_LANGUAGE =
-  /\b(fail(ed|s|ing)?|didn'?t work|broke|couldn'?t|gave up|stuck|wrong|error|crash|hallucinat|regress|abandon)\b/i
+  /\b(fail(ed|s|ing)?|didn'?t work|broke|couldn'?t|gave up|stuck|wrong|error|crash|hallucinat|regress|abandon|noisy|damag|lost|restart|insufficient|unreliable|reject|mistook|override|wash)\w*\b/i
+
+const PROOF_LANGUAGE =
+  /\b(?:\d+(?:\.\d+)?(?:%|px)?|tests? pass\w*|build pass\w*|commit\s+[a-f0-9]{6,}|shipped|published|deployed|released|verified|reached|selected correctly|skipped completed|continued from)\b/i
+
+const NON_OBVIOUS_LANGUAGE =
+  /\b(?:instead|separat\w*|split|measur\w*|keyed|durable|immediate\w*|progressive|only after|deriv\w*|resolv\w*|rebuild\w*|modell?\w*|geometry|registry|checkpoint\w*)\b/i
+
+const RECIPE_LANGUAGE =
+  /^(?:use|break|give|render|keep|inspect|measure|create|write|run|start|store|save|build|compare|collect|extract|separate|rank|scan|model)\b/i
 
 const GENERIC_TELLS = [
   'make the ai verify',
@@ -35,6 +51,8 @@ const GENERIC_TELLS = [
   'double check',
   'think step by step',
   'fence off the spec',
+  'run npm install',
+  'changed the version',
 ]
 
 const TOOL_WORDS = [
@@ -92,11 +110,23 @@ const OPINION_STOP = new Set([
 export function rankStorySessions(
   summaries: SessionSummary[],
   artifacts: Artifact[],
+  interests: string[] = [],
 ): RankedStorySession[] {
   const repeatedTokens = repeatedOpinionTokens(summaries)
   const ranked = summaries.map((summary) => {
     const reasons: string[] = []
     let score = 0
+
+    if (!hasStorySignal(summary)) {
+      return {
+        summary,
+        score,
+        reasons,
+        matchedArtifacts: [],
+        topicMatches: [],
+        repeatedOpinions: [],
+      }
+    }
 
     const matchedArtifacts = artifacts.filter((artifact) =>
       artifactMatchesSession(artifact, summary.cwd),
@@ -105,6 +135,28 @@ export function rankStorySessions(
       score += artifactBoost(matchedArtifacts)
       reasons.push(
         `built artifact: ${describeMatchedArtifacts(matchedArtifacts)}`,
+      )
+    }
+
+    const topicMatches = mergeTopicSignals([
+      ...matchedArtifacts.flatMap(topicsOf),
+      ...classifyArtifactTopics(
+        [
+          summary.summary,
+          summary.built ?? '',
+          summary.problems ?? '',
+          summary.whatWorked ?? '',
+          ...summary.failedApproaches,
+          ...summary.toolsCreated,
+          ...summary.opinions,
+        ],
+        interests,
+      ),
+    ])
+    if (topicMatches.length > 0) {
+      score += 1 + Math.min(topicMatches.length - 1, 2) * 0.25
+      reasons.push(
+        `preferred topic: ${topicMatches.map((topic) => topic.topic).join(', ')}`,
       )
     }
 
@@ -139,22 +191,38 @@ export function rankStorySessions(
       score: Number(score.toFixed(3)),
       reasons,
       matchedArtifacts,
+      topicMatches,
       repeatedOpinions,
     }
   })
   return ranked.sort((a, b) => b.score - a.score)
 }
 
+function mergeTopicSignals(
+  signals: ArtifactTopicSignal[],
+): ArtifactTopicSignal[] {
+  const byTopic = new Map<string, ArtifactTopicSignal>()
+  for (const signal of signals) {
+    const key = signal.topic.toLowerCase()
+    const existing = byTopic.get(key)
+    if (!existing || signal.score > existing.score) byTopic.set(key, signal)
+  }
+  return [...byTopic.values()].sort(
+    (left, right) =>
+      right.score - left.score || left.topic.localeCompare(right.topic),
+  )
+}
+
 const KIND_BASE: Record<ArtifactKind, number> = {
   'new-repo': 5,
-  'sandbox-project': 5,
+  'local-project': 5,
   skill: 3.5,
   'git-repo-active': 3,
 }
 
 // Score by the strongest matched artifact kind, not by artifact count. A
 // pre-existing repo with dozens of skill files must not outrank a brand-new
-// sandbox project or repo built this week.
+// local project or repo built this week.
 function artifactBoost(matched: Artifact[]): number {
   const kinds = new Set(matched.map((artifact) => artifact.kind))
   let boost = 0
@@ -203,6 +271,26 @@ function hasFailureBreakthrough(summary: SessionSummary): boolean {
   return hasFailure && hasWin
 }
 
+export function hasStorySignal(summary: SessionSummary): boolean {
+  return Boolean(
+    summary.built ||
+      summary.problems ||
+      summary.failedApproaches.length > 0 ||
+      summary.whatWorked ||
+      summary.toolsCreated.length > 0 ||
+      summary.opinions.length > 0 ||
+      frictionEntries(summary).length > 0,
+  )
+}
+
+export function storyProjectKey(cwd: string | null): string {
+  if (!cwd) return 'unknown'
+  const normalized = cwd.toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '')
+  const conductor = normalized.match(/\/conductor\/workspaces\/([^/]+)\//)
+  if (conductor?.[1]) return conductor[1]
+  return basename(normalized) || normalized
+}
+
 function repeatedOpinionTokens(summaries: SessionSummary[]): Set<string> {
   const tokenSessions = new Map<string, Set<string>>()
   for (const summary of summaries) {
@@ -243,7 +331,10 @@ function opinionTokens(opinion: string): string[] {
   return [...tokens]
 }
 
-export function validateStoryFields(fields: StoryFields): StoryValidation {
+export function validateStoryFields(
+  fields: StoryFields,
+  title?: string,
+): StoryValidation {
   const reasons: string[] = []
   const checks: Array<[keyof StoryFields, number]> = [
     ['concreteProblem', 40],
@@ -266,6 +357,28 @@ export function validateStoryFields(fields: StoryFields): StoryValidation {
     if (combined.includes(tell)) {
       reasons.push(`generic advice detected: "${tell}"`)
       break
+    }
+  }
+  const qualitySignals = [
+    FAILURE_LANGUAGE.test(fields.failedApproaches),
+    NON_OBVIOUS_LANGUAGE.test(fields.nonObviousMove),
+    RECIPE_LANGUAGE.test(fields.reusableRecipe.trim()),
+    PROOF_LANGUAGE.test(fields.evidence),
+  ].filter(Boolean).length
+  if (qualitySignals < 3) {
+    reasons.push(`weak story arc (${qualitySignals} of 4 quality signals)`)
+  }
+  if (title) {
+    const trimmed = title.trim()
+    if (trimmed.length < 20 || trimmed.length > 140) {
+      reasons.push('title must be 20-140 characters')
+    }
+    if (
+      /^(?:fixed (?:a|the) bug|updated (?:a|the)|project update|make ai verify)/i.test(
+        trimmed,
+      )
+    ) {
+      reasons.push('title is generic or routine')
     }
   }
   return { ok: reasons.length === 0, reasons }
@@ -292,7 +405,10 @@ export function storyFieldsFromMetadata(
 
 export function isCompleteStoryFinding(finding: TranscriptFinding): boolean {
   if (finding.category !== 'story') return true
-  return validateStoryFields(storyFieldsFromMetadata(finding.metadata)).ok
+  return validateStoryFields(
+    storyFieldsFromMetadata(finding.metadata),
+    finding.lesson,
+  ).ok
 }
 
 function asText(value: unknown): string {

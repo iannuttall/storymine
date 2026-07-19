@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { scanArtifacts } from './scan.js'
+import { classifyArtifactTopics, scanArtifacts } from './scan.js'
 
 function gitAvailable(): boolean {
   try {
@@ -24,7 +24,7 @@ function initRepo(dir: string): void {
   spawnSync('git', ['commit', '-q', '-m', 'initial commit'], opts)
 }
 
-test('scanArtifacts finds sandbox projects and skill files', () => {
+test('scanArtifacts follows transcript project paths without assuming a dev layout', () => {
   const dir = mkdtempSync(join(tmpdir(), 'research-artifacts-'))
   try {
     const root = join(dir, 'dev')
@@ -37,6 +37,10 @@ test('scanArtifacts finds sandbox projects and skill files', () => {
       'print("hello")\n',
     )
     writeFileSync(
+      join(sandboxRoot, 'png-to-svg', 'pyproject.toml'),
+      '[project]\nname = "png-to-svg"\n',
+    )
+    writeFileSync(
       join(sandboxRoot, 'png-to-svg', 'skills', 'png2svg', 'SKILL.md'),
       '# png2svg\n',
     )
@@ -45,18 +49,88 @@ test('scanArtifacts finds sandbox projects and skill files', () => {
     writeFileSync(join(root, 'notes', 'todo.txt'), 'stuff\n')
 
     const result = scanArtifacts({
-      root,
-      sandboxRoot,
+      projectPaths: [join(sandboxRoot, 'png-to-svg')],
       days: 365,
       now: Date.now(),
     })
     const kinds = new Set(result.artifacts.map((artifact) => artifact.kind))
-    assert.ok(kinds.has('sandbox-project'), 'finds sandbox project')
+    assert.ok(kinds.has('local-project'), 'finds non-git project')
     assert.ok(kinds.has('skill'), 'finds skill file')
     const sandbox = result.artifacts.find(
-      (artifact) => artifact.kind === 'sandbox-project',
+      (artifact) => artifact.kind === 'local-project',
     )
     assert.equal(sandbox?.name, 'png-to-svg')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('scanArtifacts treats an empty transcript project selection as empty', () => {
+  const result = scanArtifacts({ projectPaths: [], days: 7 })
+  assert.equal(result.root, null)
+  assert.deepEqual(result.artifacts, [])
+})
+
+test("classifyArtifactTopics uses each user's interests", () => {
+  const result = classifyArtifactTopics(
+    ['Built a Codex MCP tool for transcript review'],
+    ['AI coding', 'gardening'],
+  )
+
+  assert.deepEqual(
+    result.map((topic) => topic.topic),
+    ['AI coding'],
+  )
+})
+
+test('scanArtifacts extracts declared links and user-selected topic signals', {
+  skip: gitAvailable() ? false : 'git not available',
+}, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'storymine-artifact-links-'))
+  try {
+    const repo = join(dir, 'work', 'seo-tool')
+    mkdirSync(repo, { recursive: true })
+    initRepo(repo)
+    writeFileSync(
+      join(repo, 'package.json'),
+      JSON.stringify({
+        name: 'seo-tool',
+        description: 'A crawler for SEO and Search Console workflows',
+        private: false,
+        homepage: 'https://example.com/seo-tool',
+        bin: { 'seo-tool': './dist/cli.js' },
+      }),
+    )
+    const opts = { cwd: repo, encoding: 'utf8' as const }
+    spawnSync(
+      'git',
+      ['remote', 'add', 'origin', 'git@github.com:owner/seo-tool.git'],
+      opts,
+    )
+    spawnSync('git', ['add', 'package.json'], opts)
+    spawnSync('git', ['commit', '-q', '-m', 'feat: add SEO crawler CLI'], opts)
+
+    const result = scanArtifacts({
+      projectPaths: [repo],
+      topics: ['SEO', 'gardening'],
+      days: 365,
+      now: Date.now(),
+    })
+    const artifact = result.artifacts.find((item) => item.name === 'seo-tool')
+    assert.ok(artifact)
+    assert.equal(artifact.detail.workType, 'new-tool')
+    assert.deepEqual(artifact.detail.links, {
+      repositoryUrl: 'https://github.com/owner/seo-tool',
+      publicUrls: ['https://example.com/seo-tool'],
+      packageName: 'seo-tool',
+      packagePrivate: false,
+    })
+    assert.deepEqual(
+      (artifact.detail.topics as Array<{ topic: string }>).map(
+        (topic) => topic.topic,
+      ),
+      ['SEO'],
+    )
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
