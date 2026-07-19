@@ -1,4 +1,3 @@
-import type Database from 'better-sqlite3'
 import {
   type Artifact,
   type ArtifactKind,
@@ -12,6 +11,7 @@ import {
   listChunksForSession,
   listTranscriptSessionsInWindow,
 } from '../storage/database.js'
+import type Database from '../storage/sqlite.js'
 import { artifactMatchesSession, storyProjectKey } from './story-ranking.js'
 
 export interface RankedTranscriptSession {

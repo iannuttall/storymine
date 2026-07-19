@@ -8,7 +8,6 @@ import {
   statSync,
 } from 'node:fs'
 import { basename, join } from 'node:path'
-import type Database from 'better-sqlite3'
 import { type Signal, signalSchema } from '../schemas.js'
 import {
   completeSourceRun,
@@ -17,6 +16,7 @@ import {
   insertSignals,
   stableId,
 } from '../storage/database.js'
+import type Database from '../storage/sqlite.js'
 
 export type ArtifactKind =
   | 'git-repo-active'

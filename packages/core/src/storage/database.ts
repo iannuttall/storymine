@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import Database from 'better-sqlite3'
 import { fileSize, getResearchPaths } from '../paths.js'
 import {
   type Candidate,
@@ -22,6 +21,7 @@ import {
   transcriptFindingSchema,
   transcriptSessionSchema,
 } from '../schemas.js'
+import Database from './sqlite.js'
 
 const CREATE_SQL = `
 CREATE TABLE IF NOT EXISTS source_runs (

@@ -1,5 +1,4 @@
 import { basename } from 'node:path'
-import type Database from 'better-sqlite3'
 import { type Artifact, scanArtifacts } from '../artifacts/scan.js'
 import {
   publicationFromArtifacts,
@@ -18,6 +17,7 @@ import {
   stableId,
   upsertSessionSummary,
 } from '../storage/database.js'
+import type Database from '../storage/sqlite.js'
 import type { TranscriptAuditModel } from './audit.js'
 import { redactText } from './redaction.js'
 import { areDuplicateStories } from './story-dedupe.js'

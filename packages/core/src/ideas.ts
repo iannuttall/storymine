@@ -1,7 +1,7 @@
-import type Database from 'better-sqlite3'
 import type { WorkPublication } from './artifacts/work.js'
 import type { TranscriptFinding } from './schemas.js'
 import { getDb, listTranscriptFindings } from './storage/database.js'
+import type Database from './storage/sqlite.js'
 import { redactText } from './transcripts/redaction.js'
 import { reviewStatusForFinding } from './transcripts/review.js'
 import { groupDuplicateStories } from './transcripts/story-dedupe.js'

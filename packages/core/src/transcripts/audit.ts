@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process'
-import type Database from 'better-sqlite3'
 import {
   type TranscriptChunk,
   type TranscriptFinding,
@@ -13,6 +12,7 @@ import {
   nowIso,
   stableId,
 } from '../storage/database.js'
+import type Database from '../storage/sqlite.js'
 import { searchTranscriptChunks } from './search.js'
 
 export interface TranscriptAuditModel {

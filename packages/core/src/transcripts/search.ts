@@ -1,6 +1,6 @@
-import type Database from 'better-sqlite3'
 import type { TranscriptChunk, TranscriptProvider } from '../schemas.js'
 import { getDb } from '../storage/database.js'
+import type Database from '../storage/sqlite.js'
 
 export interface TranscriptChunkView extends TranscriptChunk {
   sessionTitle: string | null

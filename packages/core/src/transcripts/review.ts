@@ -1,4 +1,3 @@
-import type Database from 'better-sqlite3'
 import type { TranscriptFinding } from '../schemas.js'
 import {
   getDb,
@@ -7,6 +6,7 @@ import {
   nowIso,
   updateTranscriptFindingMetadata,
 } from '../storage/database.js'
+import type Database from '../storage/sqlite.js'
 
 export type TranscriptFindingReviewStatus =
   | 'unreviewed'

@@ -11,6 +11,7 @@ const root = process.cwd()
 const tempRoot = await mkdtemp(join(tmpdir(), 'storymine-package-'))
 const archiveDir = join(tempRoot, 'archive')
 const consumerDir = join(tempRoot, 'consumer')
+const globalPrefix = join(tempRoot, 'global')
 const cacheDir = join(tempRoot, 'cache')
 const configDir = join(tempRoot, 'config')
 const logDir = join(tempRoot, 'logs')
@@ -20,8 +21,13 @@ after(async () => {
 })
 
 function env() {
+  const cleanProcessEnv = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key]) => !key.toLowerCase().startsWith('npm_config_'),
+    ),
+  )
   return {
-    ...process.env,
+    ...cleanProcessEnv,
     STORYMINE_CACHE_DIR: cacheDir,
     STORYMINE_CONFIG_DIR: configDir,
     STORYMINE_LOG_DIR: logDir,
@@ -42,6 +48,11 @@ async function packedTarball() {
   return join(archiveDir, archive)
 }
 
+function assertCleanInstall(output) {
+  const combined = `${output.stdout}\n${output.stderr}`
+  assert.doesNotMatch(combined, /npm warn|deprecated|allow-scripts/i)
+}
+
 test('the packed package installs and runs without the workspace', {
   timeout: 120_000,
 }, async () => {
@@ -55,11 +66,16 @@ test('the packed package installs and runs without the workspace', {
       type: 'module',
     }),
   )
-  await execFileAsync('npm', ['install', '--no-audit', '--no-fund', tarball], {
-    cwd: consumerDir,
-    env: env(),
-    maxBuffer: 1024 * 1024,
-  })
+  const localInstall = await execFileAsync(
+    'npm',
+    ['install', '--no-audit', '--no-fund', tarball],
+    {
+      cwd: consumerDir,
+      env: env(),
+      maxBuffer: 1024 * 1024,
+    },
+  )
+  assertCleanInstall(localInstall)
 
   const cli = join(consumerDir, 'node_modules', 'storymine', 'dist', 'cli.js')
   const version = await execFileAsync(process.execPath, [cli, '--version'], {
@@ -92,4 +108,30 @@ test('the packed package installs and runs without the workspace', {
     { cwd: consumerDir, env: env() },
   )
   assert.equal(library.stderr, '')
+
+  const globalInstall = await execFileAsync(
+    'npm',
+    [
+      'install',
+      '--global',
+      '--prefix',
+      globalPrefix,
+      '--no-audit',
+      '--no-fund',
+      tarball,
+    ],
+    {
+      cwd: tempRoot,
+      env: env(),
+      maxBuffer: 1024 * 1024,
+    },
+  )
+  assertCleanInstall(globalInstall)
+
+  const globalVersion = await execFileAsync(
+    join(globalPrefix, 'bin', 'storymine'),
+    ['--version'],
+    { cwd: tempRoot, env: env() },
+  )
+  assert.match(globalVersion.stdout.trim(), /^\d+\.\d+\.\d+$/)
 })

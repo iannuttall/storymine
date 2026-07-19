@@ -1,4 +1,3 @@
-import type Database from 'better-sqlite3'
 import { type Artifact, storeArtifactSignals } from './artifacts/scan.js'
 import {
   type RecentWorkItem,
@@ -6,6 +5,7 @@ import {
 } from './artifacts/work.js'
 import type { TranscriptProvider } from './schemas.js'
 import { getDb, listTranscriptSessionsInWindow } from './storage/database.js'
+import type Database from './storage/sqlite.js'
 import { indexTranscriptFiles } from './transcripts/discovery.js'
 import { processTranscriptFiles } from './transcripts/processing.js'
 

@@ -7,7 +7,6 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import Database from 'better-sqlite3'
 import { type Signal, signalSchema } from '../schemas.js'
 import {
   completeSourceRun,
@@ -16,6 +15,7 @@ import {
   insertSignals,
   stableId,
 } from '../storage/database.js'
+import Database from '../storage/sqlite.js'
 
 const chromeEpochOffsetSeconds = 11644473600
 

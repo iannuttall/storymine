@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import Database from 'better-sqlite3'
 import { type Signal, signalSchema } from '../schemas.js'
 import {
   completeSourceRun,
@@ -10,6 +9,7 @@ import {
   insertSignals,
   stableId,
 } from '../storage/database.js'
+import Database from '../storage/sqlite.js'
 
 const appleEpochOffsetSeconds = 978307200
 

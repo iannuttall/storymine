@@ -1,7 +1,7 @@
-import type Database from 'better-sqlite3'
 import { type StoryIdea, storyIdeaFromFinding } from './ideas.js'
 import type { TranscriptProvider } from './schemas.js'
 import { getDb } from './storage/database.js'
+import type Database from './storage/sqlite.js'
 import type { TranscriptAuditModel } from './transcripts/audit.js'
 import { mineStories } from './transcripts/stories.js'
 import { selectStorySessions } from './transcripts/story-selection.js'

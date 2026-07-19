@@ -1,4 +1,3 @@
-import type Database from 'better-sqlite3'
 import type {
   SessionSummary,
   TranscriptChunk,
@@ -13,6 +12,7 @@ import {
   nowIso,
   upsertSessionSummary,
 } from '../storage/database.js'
+import type Database from '../storage/sqlite.js'
 import type { TranscriptAuditModel } from './audit.js'
 import { redactText } from './redaction.js'
 

@@ -1,4 +1,3 @@
-import type Database from 'better-sqlite3'
 import {
   deleteTranscriptChunksForSession,
   getDb,
@@ -8,6 +7,7 @@ import {
   upsertTranscriptChunks,
   upsertTranscriptSession,
 } from '../storage/database.js'
+import type Database from '../storage/sqlite.js'
 import { chunkTranscriptMessages } from './chunking.js'
 import { parseTranscriptFile } from './parser.js'
 

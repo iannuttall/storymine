@@ -1,8 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type Database from 'better-sqlite3'
 import type { TranscriptProvider } from '../schemas.js'
 import { getDb } from '../storage/database.js'
+import type Database from '../storage/sqlite.js'
 import { searchTranscriptChunks, type TranscriptChunkView } from './search.js'
 
 export interface TranscriptCorpusOptions {
