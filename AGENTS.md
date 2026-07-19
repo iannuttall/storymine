@@ -1,8 +1,8 @@
 # Agent Notes
 
-This repo is a local-first research collection CLI and MCP server. It turns local personal signals and AI transcript audits into high-quality candidates for newsletters and product-building content.
+This repo is Storymine, a local-first CLI and MCP server. It audits recent Claude and Codex coding chats, cross-checks them against local work evidence, and returns a small set of strong blog ideas.
 
-The ultimate goal is an ongoing CLI workflow that humans or agents can schedule to audit past AI chats and extract hard-won prompting lessons: high-agency, non-obvious ways to steer AI while building real products every day.
+The main output is broader than prompting advice. It includes tools and features built, failures and breakthroughs, reusable technical or product lessons, repeated workflow observations, and user-selected topics such as marketing, SEO, or AI coding.
 
 Build for two users:
 
@@ -13,19 +13,28 @@ The product is still early, but the architecture rule is fixed: `packages/core` 
 
 ## Product Rules
 
-- `research me apps`, `research me history`, and `research me transcripts` are the personal collectors.
-- Personal collectors create `signals`; transcript audits create `transcript_findings`; only strong findings become `candidates`.
-- The transcript auditor is looking for prompting alpha, not project summaries.
-- Good findings should help a broad audience prompt AI better tomorrow.
-- Reject project-specific implementation notes unless they translate into a reusable human move.
+- `storymine scan` is the main story workflow. `storymine work` is the model-free recent-work inventory. `storymine ideas` is the review queue.
+- Get project locations from selected transcript metadata. Do not assume another user has `~/dev`, a `sandbox` directory, or Ian's project layout.
+- Recent work evidence is deterministic: Git history, created files, package metadata, remotes, and configured site URLs.
+- User interests come from `--topics` or `STORYMINE_TOPICS`. They add a bounded ranking boost; they are never hardcoded, never a hard filter, and never enough to rescue a weak story.
+- A configured Git remote is not proof that a repository is public. Preserve visibility as unknown unless another source verifies it.
+- Strong story findings require a concrete problem, failed approach, non-obvious move, reusable recipe, and observable proof.
+- Reject routine edits and project summaries even when they mention real files.
 - Transcript audit output must be evidence-backed, redacted, concise, and structured enough for another agent to act on.
-- Candidate exports should be useful as draft-agent input without requiring raw transcript access.
+- Idea output must be useful as draft-agent input without requiring raw transcript access.
 - JSON mode is for agents and scripts. Never add prompts or human-only formatting when `--json` is used.
 - Keep raw private content local. Do not commit transcript exports, browser history dumps, SQLite DBs, local configs, or logs.
 
-## What The Auditor Should Extract
+## What The Miner Should Extract
 
-Good transcript findings look like:
+Good ideas and observations look like:
+
+- a tool or feature actually built during the selected window
+- a declared repository, package, or site URL, with provenance and honest visibility caveats
+- an interesting marketing, SEO, AI-coding, product, design, or technical lesson when it matches the current user's interests
+- a failure-to-result arc with files, commands, checks, commits, metrics, or shipped output as evidence
+- a reusable recipe that makes sense without the original repo or transcript
+- repeated observations supported by more than generic model commentary
 
 - prompt patterns users can paste tomorrow
 - course corrections where the human stopped the AI going down the wrong path
@@ -50,33 +59,43 @@ Weak findings:
 - architecture notes without a reusable prompting/workflow lesson
 - private or identifying details
 - anything requiring the original project context to understand
+- claims that a configured remote or URL is publicly reachable without verification
 
 ## Current CLI Shape
 
-Root commands:
+Primary commands:
 
 ```bash
-research candidates
-research doctor
-research findings
-research mcp
-research me
-research privacy
-research reset
+storymine scan
+storymine work
+storymine ideas
+storymine doctor
+storymine privacy
+storymine mcp serve
 ```
+
+Typical workflow:
+
+```bash
+storymine scan --days 14 --topics "marketing,seo,AI coding"
+storymine work --days 14 --topics "marketing,seo,AI coding"
+storymine ideas
+storymine ideas approve <idea-id>
+storymine ideas reject <idea-id>
+storymine ideas --status all --json
+```
+
+Use `storymine help all` for the older low-level collectors, transcript search, finding review, and candidate export commands.
 
 Transcript workflow:
 
 ```bash
-research me transcripts index --provider claude --project binday --limit 10
-research me transcripts parse --provider claude --limit 10 --maxTokens 2500
-research me transcripts search --query "generic copy inspect screen" --project binday
-research me transcripts read --session <session-id> --sequence <n>
-research me transcripts audit --limit 5 --timeoutSeconds 180
-research findings review --markdown --limit 10
-research findings approve --id <finding-id>
-research candidates promote --minConfidence 0.7 --limit 25
-research candidates export --format markdown --limit 25
+storymine me transcripts index --provider claude --project binday --limit 10
+storymine me transcripts parse --provider claude --limit 10 --maxTokens 2500
+storymine me transcripts search --query "generic copy inspect screen" --project binday
+storymine me transcripts read --session <session-id> --sequence <n>
+storymine findings review --markdown --limit 10
+storymine candidates promote --minConfidence 0.7 --limit 25
 ```
 
 Project targeting:
@@ -121,14 +140,14 @@ Finding review:
 ## Repo Map
 
 - `packages/core`: reusable product logic.
-- `packages/cli`: `research` command and terminal output.
+- `packages/cli`: `storymine` command and terminal output.
 - `packages/mcp`: MCP stdio server exposing safe core tools.
 - `skills`: repo-local Codex skills for using this tool from other agent sessions.
 - `plans`: planning/spec documents.
 
 Skills:
 
-- `skills/research/SKILL.md`: broad guide for agents using the CLI/MCP to collect signals, audit transcripts, promote candidates, and export feeds.
+- `skills/storymine/SKILL.md`: main guide for agents scanning and reviewing story ideas.
 
 Core areas:
 
@@ -136,6 +155,11 @@ Core areas:
 - `packages/core/src/storage/database.ts`: SQLite schema, checkpoints, CRUD helpers.
 - `packages/core/src/paths.ts`: local config/cache/log paths.
 - `packages/core/src/system.ts`: privacy/doctor/reset helpers.
+- `packages/core/src/scan.ts`: full v1 scan orchestration.
+- `packages/core/src/work-scan.ts`: model-free recent-work orchestration shared by `work` and `scan`.
+- `packages/core/src/ideas.ts`: safe idea listing and markdown output.
+- `packages/core/src/artifacts/scan.ts`: portable project evidence, topic matching, and declared link discovery.
+- `packages/core/src/artifacts/work.ts`: publish-safe recent-work records.
 - `packages/core/src/collectors/app-usage.ts`: Screen Time collector.
 - `packages/core/src/collectors/chrome-history.ts`: Chrome history collector.
 - `packages/core/src/transcripts/discovery.ts`: Claude/Codex file discovery, project filters.
@@ -147,6 +171,10 @@ Core areas:
 - `packages/core/src/transcripts/corpus.ts`: semantic-ready markdown corpus export.
 - `packages/core/src/transcripts/review.ts`: finding review helpers.
 - `packages/core/src/transcripts/processing.ts`: parse/index orchestration.
+- `packages/core/src/transcripts/story-selection.ts`: deterministic preselection before model calls.
+- `packages/core/src/transcripts/summarize.ts`: resumable session summaries.
+- `packages/core/src/transcripts/stories.ts`: deep story mining.
+- `packages/core/src/transcripts/story-eval-fixtures.ts`: reviewed strong/weak quality examples.
 - `packages/core/src/candidates.ts`: promotion, dedupe, markdown/JSON export.
 
 CLI areas:
@@ -154,6 +182,9 @@ CLI areas:
 - `packages/cli/src/index.ts`: root command registration.
 - `packages/cli/src/args.ts`: shared argument parsing helpers.
 - `packages/cli/src/utils.ts`: terminal output helpers.
+- `packages/cli/src/commands/scan.ts`: small main scan command.
+- `packages/cli/src/commands/work.ts`: deterministic recent-work command.
+- `packages/cli/src/commands/ideas.ts`: idea listing and review.
 - `packages/cli/src/commands/me.ts`: app/history/transcript commands.
 - `packages/cli/src/commands/findings.ts`: finding review commands.
 - `packages/cli/src/commands/candidates.ts`: promote/list/export commands.
@@ -185,22 +216,21 @@ pnpm lint:fix
 Useful CLI smoke checks:
 
 ```bash
-node packages/cli/dist/index.js --help
-node packages/cli/dist/index.js doctor
-node packages/cli/dist/index.js privacy
-node packages/cli/dist/index.js me transcripts --help
-node packages/cli/dist/index.js findings --help
-node packages/cli/dist/index.js candidates --help
+node dist/cli.js --help
+node dist/cli.js scan --help
+node dist/cli.js ideas --help
+node dist/cli.js doctor
+node dist/cli.js privacy
 ```
 
 For a safe targeted transcript smoke test, use a scratch cache:
 
 ```bash
-SCRATCH=$(mktemp -d /tmp/research-smoke-XXXXXX)
-RESEARCH_CACHE_DIR="$SCRATCH/cache" \
-RESEARCH_CONFIG_DIR="$SCRATCH/config" \
-RESEARCH_LOG_DIR="$SCRATCH/logs" \
-node packages/cli/dist/index.js me transcripts index --provider claude --project binday --limit 5 --json
+SCRATCH=$(mktemp -d /tmp/storymine-smoke-XXXXXX)
+STORYMINE_CACHE_DIR="$SCRATCH/cache" \
+STORYMINE_CONFIG_DIR="$SCRATCH/config" \
+STORYMINE_LOG_DIR="$SCRATCH/logs" \
+node dist/cli.js me transcripts index --provider claude --project binday --limit 5 --json
 rm -rf "$SCRATCH"
 ```
 
@@ -222,30 +252,34 @@ rm -rf "$SCRATCH"
 - Do not paste raw transcript chunks into docs or final answers.
 - Evidence in candidates should be short paraphrases.
 - Model audit prompts should receive redacted chunks only.
-- Use `research privacy` to inspect local paths.
-- Use `research reset --yes` to clear local research state.
-- Use `research me transcripts reset-audit --yes` to clear transcript findings/candidates and reset chunk audit status.
+- Use `storymine privacy` to inspect local paths.
+- Use `storymine reset --yes` to clear local Storymine state.
+- Use `storymine me transcripts reset-audit --yes` to clear transcript findings/candidates and reset chunk audit status.
 
 ## Output Quality Bar
 
-Before calling candidate output "good", check:
+Before calling story output "good", check:
 
-- Can someone use the tip without knowing the original project?
-- Is the prompting move concrete?
-- Is the mistake to avoid named clearly?
-- Is there an example prompt they could paste?
+- Can someone understand and use the idea without knowing the original project?
+- Does it name what was actually built or observed during the selected window?
+- Is the failure or mistaken approach concrete?
+- Is the non-obvious move genuinely different from routine advice?
+- Is there a recipe another person could follow?
+- Is there observable proof such as commits, passing checks, metrics, generated output, or a shipped result?
+- Are repository and site links clearly labelled as declared or verified?
 - Is evidence paraphrased and non-private?
-- Are duplicates collapsed?
-- Is the export varied across alpha types?
-- Are stop/steer/pushback/reminder moments labelled clearly enough to review later?
-- Can a non-technical but serious reader understand why the tip matters?
+- Are projects diversified so one busy repo does not dominate?
+- Do user interests influence ranking without becoming a hard filter?
+- Can a non-technical but serious reader understand why the idea matters?
 - Could this become a reusable skill/checklist/rule for future agents?
 - Does the title say the actual instruction, or is it just a friendly phrase?
 - Does the title avoid unclear shorthand like infra, config, API, caveat, and feature parity?
 
-The next major quality improvement should come from reviewed examples: run more real project audits, have the human mark strong/weak findings, then add those examples back into the audit or curation prompt.
+The next major quality improvement should come from reviewed examples: run real scans, have the human mark strong/weak ideas, and add privacy-safe versions to the deterministic eval fixtures.
 
 Reviewed prompt-alpha fixtures live in `packages/core/src/transcripts/eval-fixtures.ts`.
 Use them when tuning extraction prompts. They intentionally focus on human
 intervention moments: stop, steer, pushback, reminder, scope-reset, and
 validation-demand.
+
+Reviewed story fixtures live in `packages/core/src/transcripts/story-eval-fixtures.ts`. Every strong fixture must pass the deterministic gate and every weak fixture must fail it.

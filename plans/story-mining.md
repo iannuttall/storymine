@@ -1,5 +1,27 @@
 # Story Mining Redesign
 
+## V1 hardening update (2026-07-19)
+
+This file records the original design and is kept for history. The public v1 surface is now:
+
+```bash
+storymine scan [--days N] [--project TEXT] [--provider claude|codex] [--topics CSV] [--ideas N] [--agent codex|claude] [--json]
+storymine work [--days N] [--project TEXT] [--provider claude|codex] [--topics CSV] [--json]
+storymine ideas [approve|reject|needs-work] [idea-id]
+```
+
+The main scan no longer assumes `~/dev` or `~/dev/sandbox`. It indexes selected chats first, gets their working directories, resolves Git roots, and inspects only those projects. Broad root scanning remains an explicit power tool.
+
+Recent-work evidence now includes work type, recent commits, created-file counts, package metadata, repository remotes, and locally configured site URLs. Repository visibility remains `unknown`; a remote is not proof that a repo is public. URLs are not contacted.
+
+User interests come from `--topics` or `STORYMINE_TOPICS`. They are deterministic, bounded ranking hints and labels. With no interests, ranking is topic-neutral.
+
+The quality gate uses privacy-safe strong and weak fixtures, requires at least three of four arc signals (real failure, non-obvious move, actionable recipe, observable proof), rejects routine/generic output, caps one mined idea per project, and keeps failed model output retryable.
+
+Packaging follows the `seo` CLI shape: one public npm package, private workspaces, bundled CLI/core/MCP entry points, curated default help, package-contract tests, and install-from-tarball tests.
+
+## Original diagnosis and design
+
 Why: the audit pipeline produced meta-prompting platitudes and missed the
 two best stories of the week (the png-to-svg reconstruction skill in
 `~/dev/sandbox/png-to-svg`, and repeated GPT-5.6 overengineering

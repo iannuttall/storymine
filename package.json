@@ -1,19 +1,70 @@
 {
-  "name": "research",
-  "private": true,
+  "name": "storymine",
   "version": "0.1.0",
+  "description": "A local-first CLI that finds useful blog ideas in Claude and Codex coding chats.",
   "type": "module",
+  "license": "Apache-2.0",
+  "author": "Ian Nuttall",
+  "keywords": [
+    "ai",
+    "claude",
+    "codex",
+    "transcripts",
+    "blogging",
+    "cli",
+    "mcp"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "storymine": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "LICENSE",
+    "PRIVACY.md",
+    "SECURITY.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "packageManager": "pnpm@10.1.0",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "build": "turbo run build",
+    "build": "turbo run build && pnpm run build:package",
+    "build:package": "tsup --config tsup.config.ts",
     "clean": "turbo run clean",
     "lint": "biome check . && turbo run lint",
     "lint:fix": "biome check . --write",
-    "test": "turbo run test",
+    "pack:check": "npm pack --dry-run",
+    "prepack": "pnpm run build:package && node --test scripts/package.test.mjs",
+    "test": "turbo run test && pnpm run build:package && node --test scripts/package.test.mjs",
+    "test:package-install": "pnpm run build:package && node --test scripts/installed-package.test.mjs",
     "typecheck": "turbo run typecheck"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.5",
+    "better-sqlite3": "^12.2.0",
+    "citty": "^0.1.6",
+    "cli-table3": "^0.6.5",
+    "env-paths": "^3.0.0",
+    "picocolors": "^1.1.1",
+    "zod": "^4.1.5"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
@@ -22,10 +73,5 @@
     "tsup": "^8.5.0",
     "turbo": "^2.5.5",
     "typescript": "^5.9.2"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3"
-    ]
   }
 }

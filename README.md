@@ -1,280 +1,177 @@
-# research
+# Storymine
 
-Local-first research collection CLI and MCP server for turning personal work signals into newsletter-ready ideas.
+Storymine reads your recent Claude and Codex coding chats and finds the few ideas that may be worth turning into blog posts.
 
-`research` looks at local signals such as app usage, Chrome history, and AI coding transcripts. It filters private/noisy material, extracts reusable lessons, promotes the strongest findings into candidates, and exports structured markdown or JSON that another agent can use.
+It looks for work with a real shape: a concrete problem, failed attempts, a useful change of direction, a recipe someone else can follow, and proof that the result worked.
 
-The main goal is not "summarize what happened in a project". The goal is an ongoing CLI workflow that can be scheduled by humans or agents to audit past AI chats and extract hard-won prompting lessons: high-agency, non-obvious ways to steer AI while building real products every day.
+The evidence pass is deterministic. Storymine gets project directories from the selected chats, resolves their Git roots, and inspects recent commits, created files, package metadata, repository remotes, and configured site URLs. It does not assume a particular folder layout.
 
-## What It Does
+## Install
 
-- Collects Screen Time app usage signals from the local Mac.
-- Collects Chrome history signals while filtering localhosts, dashboards, inboxes, and other noise.
-- Indexes Claude and Codex transcript files incrementally.
-- Parses transcripts into focused user/assistant chunks, excluding system prompts, duplicated event messages, and chain-of-thought noise.
-- Redacts obvious secrets before audit prompts leave the machine.
-- Searches and reads cleaned transcript chunks with exact session/file provenance.
-- Exports cleaned chunks as markdown corpus files for a future semantic index.
-- Audits transcript chunks with a local model command. The default is `codex exec --ephemeral -`.
-- Extracts evidence-backed prompting findings.
-- Provides a review queue so humans can approve/reject findings before promotion.
-- Promotes high-confidence findings into newsletter-shaped candidates.
-- Dedupes repeated findings and merges evidence from similar transcript moments.
-- Exposes the same core through CLI and MCP.
+```bash
+npm install --global storymine
+```
 
-## Start Here
+Storymine needs Node.js 20 or newer. It also needs either the Codex CLI or Claude Code for the model pass.
 
-From source:
+## Scan your recent chats
+
+```bash
+storymine scan
+```
+
+This scans the last seven days. Indexing and redaction happen locally. Storymine ranks sessions before it calls a model, so a busy week does not turn into hundreds of model calls.
+
+Narrow the scan when you already know where the useful work happened:
+
+```bash
+storymine scan --project seo
+storymine scan --provider codex --days 14
+storymine scan --agent claude
+```
+
+Personal interests are optional ranking hints, not built-in product opinions:
+
+```bash
+storymine scan --topics "marketing,seo,AI coding"
+```
+
+Set `STORYMINE_TOPICS` to use the same interests on every scan. With no interests configured, Storymine stays topic-neutral. Interests add a small deterministic boost and never rescue a weak story.
+
+A scan can take several minutes. It is resumable. Sessions with valid stored summaries are skipped on the next run, while failed or invalid summaries are tried again.
+
+## See what you built
+
+Use the deterministic evidence pass without a model:
+
+```bash
+storymine work --days 14
+storymine work --topics "marketing,seo,AI coding" --json
+```
+
+This lists recent tools, projects, created-file and commit counts, command or skill signals, package names, repository remotes, and configured site URLs. It is also included in `storymine scan` output.
+
+## Read and review ideas
+
+```bash
+storymine ideas
+```
+
+Each idea includes the problem, what failed, the non-obvious move, a reusable recipe, evidence, matched interests, and any locally declared repository, package, or site links. Raw transcript text is not included.
+
+A Git remote proves that a repository URL is configured. It does not prove that the repository is public. Storymine labels its visibility as unknown. Site URLs come from local package or deployment configuration and are not checked over the network.
+
+Keep useful ideas and reject weak ones:
+
+```bash
+storymine ideas approve <idea-id>
+storymine ideas reject <idea-id>
+storymine ideas needs-work <idea-id>
+```
+
+That feedback stays in the local database. It gives future prompt and eval work something real to improve against.
+
+Agents and scripts should use JSON:
+
+```bash
+storymine scan --json
+storymine ideas --status all --json
+```
+
+JSON mode does not print progress or terminal decoration.
+
+## What a good result looks like
+
+Weak output sounds like advice anyone could have written without doing the work:
+
+- write tests
+- be clear with AI
+- use a better library
+- review the output
+
+A useful idea names what actually happened. For example, a raster logo kept producing messy traced paths. The useful move was to measure the intended geometry, rebuild the shape from circles and shared slopes, then compare renders with image metrics. The passing metrics and generated asset provide the proof.
+
+Storymine rejects ideas that are too short, generic, routine, missing a failure-to-result arc, or missing measurable evidence. It also limits projects from dominating a run, collapses repeat stories into supporting evidence, and keeps invalid model responses retryable. Human review is still part of the workflow. A model score is not a publishing decision.
+
+## Privacy
+
+Transcript files and Storymine's SQLite database stay on your machine. Stored chunks have common secrets, email addresses, and usernames in home directory paths removed.
+
+The model pass is a separate boundary. Redacted excerpts are sent to the command used by `storymine scan`, which defaults to `codex exec --ephemeral -`. Your model provider may process those excerpts outside your machine.
+
+Inspect local paths and counts with:
+
+```bash
+storymine privacy
+storymine doctor
+```
+
+`storymine doctor` also checks whether the Codex and Claude commands are available and reports their installed versions.
+
+Delete Storymine's local state only when you mean to:
+
+```bash
+storymine reset --yes
+```
+
+See [PRIVACY.md](PRIVACY.md) for the full boundary.
+
+## Install the agent skill
+
+Storymine ships one small skill that teaches coding agents when to scan, use the deterministic work inventory, and review ideas. Install it through the same skills ecosystem used by the SEO CLI:
+
+```bash
+storymine skill install
+```
+
+Without a global Storymine install, run:
+
+```bash
+npx storymine skill install
+```
+
+The installer delegates to `npx skills add iannuttall/storymine`.
+
+## MCP
+
+```bash
+storymine mcp serve
+```
+
+The MCP server exposes four jobs:
+
+- `storymine_scan`
+- `storymine_recent_work`
+- `storymine_list_ideas`
+- `storymine_review_idea`
+
+The CLI and MCP server call the same functions in `packages/core`.
+
+## Power tools
+
+Normal use should stay on `scan` and `ideas`. The indexing, search, summary, finding, and old candidate commands remain available for debugging and deeper audits.
+
+```bash
+storymine help all
+storymine me transcripts --help
+storymine findings --help
+```
+
+## Work on the source
 
 ```bash
 pnpm install
 pnpm build
-node packages/cli/dist/index.js --help
-```
-
-If linked locally, use:
-
-```bash
-research --help
-research doctor
-research privacy
-```
-
-## Main Workflow
-
-Collect quick personal context:
-
-```bash
-research me apps --days 7
-research me history --days 7
-```
-
-Run a small transcript audit:
-
-```bash
-research me transcripts index --provider claude --project binday --limit 10
-research me transcripts parse --provider claude --limit 10 --maxTokens 2500
-research me transcripts search --query "generic copy inspect screen" --project binday
-research me transcripts read --session <session-id> --sequence <n>
-research me transcripts audit --limit 5 --timeoutSeconds 180
-research findings review --markdown --limit 10
-research findings approve --id <finding-id>
-research candidates promote --minConfidence 0.7 --limit 25
-research candidates export --format markdown --limit 25
-```
-
-Override the model command when needed:
-
-```bash
-research me transcripts audit --command "claude -p" --limit 5
-research me transcripts audit --command "codex exec --ephemeral -" --limit 5
-```
-
-Target audits with the same filters used by search:
-
-```bash
-research me transcripts audit --query "overbuilt" --project tidechecker --limit 5
-research me transcripts audit --provider codex --status failed --limit 5
-```
-
-Use `--project` to target transcript paths, Claude project folder names, or Codex `cwd` metadata:
-
-```bash
-research me transcripts index --project binday
-research me transcripts index --project tidechecker
-research me transcripts index --provider codex --project /Users/iannuttall/workers/binday
-```
-
-Claude `agent-*.jsonl` auxiliary logs are skipped by default. Include them only when needed:
-
-```bash
-research me transcripts index --project binday --includeAuxiliary
-```
-
-## What Good Findings Look Like
-
-Good candidates are useful to someone who wants to work better with AI tomorrow, even if they know nothing about the original project.
-
-Examples of good findings:
-
-- Tell AI examples are illustrative, not the whole spec, or it may stop exploring.
-- Give subjective work concrete acceptance criteria before asking for improvements.
-- Say what already works before asking AI to fix one part.
-- Force live verification for current product features, prices, rules, or dates.
-- Ask AI to state unknowns instead of filling gaps with confident guesses.
-- Use explicit "do not mention" lists when asking AI to write public-facing copy.
-- Make AI inspect the actual screen, file, or data before rewriting generic output.
-- Give AI both the desired tone and the anti-tone to avoid.
-- Make AI search and read exact prior examples before redoing research.
-- Stop the AI as soon as it drifts and restate the rule it missed.
-- Push back when AI gives project-specific output after you asked for broad lessons.
-- Remind AI of standing rules before letting it continue with code or analysis.
-
-Weak findings are rejected or should be ignored during review:
-
-- Product-specific implementation notes.
-- Architecture choices that only matter in this repo.
-- Generic advice like "write tests" or "review output".
-- Summaries of a chat without a reusable behaviour change.
-- Anything that requires private context to understand.
-
-The best findings are usually intervention moments: the exact instruction, constraint, verification loop, anti-example, pushback, reminder, or correction pattern that changed the AI's behaviour. Prefer findings that can say what the AI was about to do wrong, how the human steered it, and what reusable prompt move follows from that.
-
-Good findings can be technical, but they should be explainable to smart beginners. For example, replace "prompt for idempotence" with "ask AI to make expensive work restartable so failed runs do not waste completed work." Repeated UI, performance, debugging, and workflow findings can later become reusable agent skills.
-
-Do not flatten strong findings into vague slogans. Reject headings like "Give agents a finish line." Use direct instructions such as "Ask AI to implement one task, run checks, commit, and continue." The title should carry the actual prompt move.
-
-Avoid developer shorthand in titles. "Infra config" should become "settings." "API" should become "outside service" unless the reader truly needs the technical term. The finding can keep technical detail in the example prompt or explanation.
-
-## Search And Semantic Retrieval Direction
-
-The extraction pipeline should eventually have two retrieval layers:
-
-- exact history search/read: locate sessions, scan parts, and read the few messages that matter
-- semantic search over cleaned transcript parts: find conceptually similar prompting moments across agents and projects
-
-A QMD-style local index is a good fit for the second layer. The current bridge is:
-
-```bash
-research me transcripts export-corpus --output /tmp/research-transcript-corpus --project tidechecker --limit 100
-```
-
-That writes one markdown file per cleaned chunk with JSON provenance. A semantic engine can index those files, then feed exact chunk ids/session ids back into `search`, `show`, `read`, or targeted `audit`.
-
-Do not replace exact transcript provenance with summaries. Semantic search should help find candidates; final findings still need evidence-backed source parts.
-
-Reviewed examples for prompt tuning live in `packages/core/src/transcripts/eval-fixtures.ts`. They are privacy-safe summaries, not raw transcript excerpts, and should be used to keep future extraction focused on real intervention moments rather than project-specific notes.
-
-## Findings Review
-
-Audits are model output. Review findings before promotion:
-
-```bash
-research findings review --status unreviewed --markdown --limit 20
-research findings approve --id <finding-id> --notes "Strong reusable prompt."
-research findings reject --id <finding-id> --notes "Too project-specific."
-research findings needs-work --id <finding-id>
-```
-
-Review status is stored in finding metadata, so it does not require a schema migration.
-
-## Candidate Export
-
-Promoted candidates are designed for draft agents. Markdown exports include:
-
-- summary
-- why it matters
-- better move
-- mistake to avoid
-- example prompt
-- reusable rule
-- paraphrased evidence
-- alpha type and score
-- support count when multiple similar findings were merged
-
-```bash
-research candidates list --json
-research candidates export --format markdown
-research candidates export --format json --limit 10
-```
-
-Useful promotion controls:
-
-```bash
-research candidates promote --minConfidence 0.75
-research candidates promote --maxPerAlphaType 3
-research candidates promote --force
-```
-
-## Local Data And Privacy
-
-This is local-first. Raw transcript files, browser history, local cache databases, and logs should stay on the machine.
-
-The CLI stores its own local state in OS-specific app paths. Inspect them with:
-
-```bash
-research privacy
-```
-
-Clear local research state with:
-
-```bash
-research reset --yes
-```
-
-Clear transcript audit findings/candidates and reset chunks with:
-
-```bash
-research me transcripts reset-audit --yes
-```
-
-## MCP
-
-The MCP package exposes safe research tools for agents.
-
-```bash
-research mcp serve
-```
-
-Keep MCP tools thin. Reusable behaviour belongs in `packages/core`; MCP and CLI should both call into that.
-
-## Agent Skill
-
-This repo includes a repo-local Codex skill:
-
-- `skills/research`: teaches agents how to collect signals, audit transcripts, promote findings, and export candidate feeds.
-
-Use it when an agent needs to operate this CLI without reading the whole repo.
-
-## Repo Map
-
-- `packages/core`: schemas, SQLite storage, collectors, transcript discovery/parsing/redaction/audit, candidate promotion/export.
-- `packages/cli`: `research` command, argument parsing, terminal output.
-- `packages/mcp`: MCP stdio server exposing core tools.
-- `skills`: repo-local agent skills for using `research`.
-- `plans`: product and implementation plans.
-
-Important files:
-
-- `packages/core/src/collectors/app-usage.ts`: Screen Time collector.
-- `packages/core/src/collectors/chrome-history.ts`: Chrome history collector.
-- `packages/core/src/transcripts/discovery.ts`: transcript file discovery and project targeting.
-- `packages/core/src/transcripts/parser.ts`: Claude/Codex transcript parsing.
-- `packages/core/src/transcripts/chunking.ts`: redacted chunk creation.
-- `packages/core/src/transcripts/audit.ts`: audit prompt and model-command adapter.
-- `packages/core/src/transcripts/search.ts`: exact transcript chunk search/read helpers.
-- `packages/core/src/transcripts/corpus.ts`: semantic-ready markdown corpus export.
-- `packages/core/src/transcripts/review.ts`: finding review queue helpers.
-- `packages/core/src/candidates.ts`: finding promotion, dedupe, candidate export.
-- `packages/core/src/storage/database.ts`: SQLite schema and storage helpers.
-- `packages/cli/src/commands/me.ts`: personal collector and transcript CLI.
-- `packages/cli/src/commands/findings.ts`: finding review CLI.
-- `packages/cli/src/commands/candidates.ts`: candidate promotion/list/export CLI.
-
-## Development
-
-Run from the repo root:
-
-```bash
-pnpm build
 pnpm typecheck
 pnpm lint
 pnpm test
+pnpm test:package-install
 ```
 
-Useful smoke checks:
+The monorepo has three private workspaces:
 
-```bash
-node packages/cli/dist/index.js --help
-node packages/cli/dist/index.js doctor
-node packages/cli/dist/index.js privacy
-node packages/cli/dist/index.js me transcripts --help
-node packages/cli/dist/index.js findings --help
-node packages/cli/dist/index.js candidates --help
-```
+- `packages/core` owns storage, parsing, redaction, ranking, summaries, mining, ideas, and the full scan
+- `packages/cli` owns command parsing and terminal output
+- `packages/mcp` owns the small stdio server
 
-Use Biome for formatting:
-
-```bash
-pnpm lint:fix
-```
+The root `storymine` package bundles those workspaces into one public API, one CLI binary, and `storymine/mcp`.

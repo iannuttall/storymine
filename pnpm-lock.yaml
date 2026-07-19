@@ -7,6 +7,28 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.17.5
+        version: 1.29.0(zod@4.4.3)
+      better-sqlite3:
+        specifier: ^12.2.0
+        version: 12.11.1
+      citty:
+        specifier: ^0.1.6
+        version: 0.1.6
+      cli-table3:
+        specifier: ^0.6.5
+        version: 0.6.5
+      env-paths:
+        specifier: ^3.0.0
+        version: 3.0.0
+      picocolors:
+        specifier: ^1.1.1
+        version: 1.1.1
+      zod:
+        specifier: ^4.1.5
+        version: 4.4.3
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.4.16
